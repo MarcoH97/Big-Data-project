@@ -1,3 +1,4 @@
+
 # Load packages
 library(combinat)
 library(foreach)
