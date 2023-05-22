@@ -1,10 +1,10 @@
-
 # Load packages
 library(combinat)
 library(foreach)
 library(doParallel)
 library(readxl)
 library(progress)
+library(dplyr)
 
 
 # Get the directory path of the current code
@@ -19,43 +19,41 @@ data <- read_excel("C:/Users/marco/Documents/HSG/Big Data/BDBD_data.xlsx")
 data <- na.omit(data)
 
 # Set the first column as row index
-row.names(data) <- data[,1]
+rownames(data) <- data[,1]
 
 # Remove the first column from the data frame
 data <- data[, -1]
 
-# Get column names
-cols <- colnames(data)
+data <- data[,1:5]
 
-#register a parallel backend using all available cores
-registerDoParallel(makeCluster(detectCores()))
 
-# create a progress bar
-pb <- progress_bar$new(total = length(cols) - 1)
-
-# For each number from 2 to the number of columns in the data
-for (n in 2:length(cols)) {
+# Define a function to generate weighted columns
+generate_weighted_cols <- function(data) {
+  # Get the number of columns in the dataframe
+  num_cols <- ncol(data)
   
-  # update the progress bar
-  pb$tick()
-  
-  # Generate all combinations of columns of size 'n'
-  combinations <- combinat::combn(cols, n, simplify = FALSE)
-  
-  # For each combination of columns
-  foreach(i = 1:length(combinations), .combine = rbind) %dopar% {
-    comb <- combinations[[i]]
+  # Iterate over i for i-combinations
+  for (i in 2:num_cols) {
+    # Generate all i-combinations of column indices
+    combos <- combinat::combn(1:num_cols, i, simplify = FALSE)
     
-    # calculate the new column applying appropriate weights
-    new_col <- rowSums(data[, comb] / n)
-    
-    # create a name for the new column
-    new_col_name <- paste(comb, collapse = "-")
-    
-    # add the new column to the data
-    data[, new_col_name] <- new_col
+    # Iterate over each combination
+    for (combo in combos) {
+      # Calculate the new column as the row-wise mean of the selected columns
+      new_col <- rowMeans(data[, combo])
+      
+      # Create the new column name
+      new_col_name <- paste(names(data)[combo], collapse = " ")
+      
+      # Add the new column to the dataframe
+      data[[new_col_name]] <- new_col
+    }
   }
+  return(data)
 }
 
-# stop the parallel cluster
-stopImplicitCluster()
+# Use the function on your dataframe
+data <- generate_weighted_cols(data)
+
+
+
