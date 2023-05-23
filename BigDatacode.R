@@ -62,7 +62,7 @@ generate_weighted_cols <- function(data, max_comb_size) {
 
 # Use the function on your dataframe with max combination size 
 start_time <- Sys.time()
-data <- generate_weighted_cols(data, 2)
+data <- generate_weighted_cols(data, 5)
 end_time <- Sys.time()
 execution_time <- end_time - start_time
 print(execution_time)
@@ -114,7 +114,7 @@ generate_weighted_cols_parallel <- function(data, max_comb_size) {
 
 
 start_time <- Sys.time()
-data <- generate_weighted_cols_parallel(data, 2)
+data <- generate_weighted_cols_parallel(data, 5)
 end_time <- Sys.time()
 execution_time <- end_time - start_time
 print(execution_time)
@@ -246,13 +246,82 @@ calculate_returns <- function(data, years, threshold) {
   
 }
 
-
 # Use function
 # Replace "10" and "100" with your desired years and threshold
 result <- calculate_returns(data, 10, 85)
 
 # Print result
 print(result)
+
+
+#### Algo parallel processing ####
+calculate_returns_single_column <- function(col_name, data, period, threshold) {
+  # Skip Date column
+  if (col_name == "Date") return(NULL)
+  
+  # Initialize worst period end value as infinity
+  worst_period_end_value <- Inf
+  
+  # Initialize flag indicating whether column dropped below threshold
+  below_threshold <- FALSE
+  
+  # Iterate over each day
+  for (i in 1:(nrow(data) - period + 1)) {
+    # Calculate product of returns for the period
+    period_return <- prod(1 + data[i:(i + period - 1), col_name]) * 100
+    
+    # Check if period return dropped below threshold
+    if (period_return < threshold) {
+      below_threshold <- TRUE
+      break
+    }
+    
+    # Update worst period end value
+    worst_period_end_value <- min(worst_period_end_value, period_return)
+  }
+  
+  # If column never dropped below threshold, return result
+  if (!below_threshold) {
+    return(data.frame(Column = col_name,
+                      Worst_Period_End_Value = worst_period_end_value,
+                      stringsAsFactors = FALSE))
+  } else {
+    return(NULL)
+  }
+}
+
+calculate_returns_parallel <- function(data, years, threshold) {
+  # Calculate number of rows (days) per year
+  days_per_year <- 252  # typically there are 252 trading days in a year
+  
+  # Convert years to trading days
+  period <- years * days_per_year
+  
+  # Apply the function to each column in parallel
+  output <- mclapply(names(data),
+                     calculate_returns_single_column,
+                     data = data,
+                     period = period,
+                     threshold = threshold,
+                     mc.cores = detectCores())
+  
+  # Combine results and remove NULL results (columns that dropped below threshold)
+  output <- do.call("rbind", output)
+  
+  # Return output
+  return(output)
+}
+
+# Use function
+# Replace "10" and "85" with your desired years and threshold
+result <- calculate_returns_parallel(data, 10, 85)
+
+# Print result
+print(result)
+
+
+
+
 
 
 #### Algo test ####
@@ -380,6 +449,33 @@ var_percent <- var*100
 
 plot_df <- data.frame(means=means_percent, sds=var_percent)
 
+# Add a new column for color
+plot_df$group <- NA
+# Assign group labels based on column number
+plot_df$group[1:26] <- 'Original strategies'
+plot_df$group[27:351] <- '2 combinations'
+plot_df$group[352:2951] <- '3 combinations'
+plot_df$group[2952:17901] <- '4 combinations'
+plot_df$group[17902:83681] <- '5 combinations'
+
+
+# Plot with color aesthetic mapped to group
+ggplot(plot_df, aes(x=means_percent, y = var_percent, color=group))+
+  geom_point()+
+  labs(x='Mean', y="Variance", title="Mean and variance of all the investment strategies")+
+  scale_x_continuous(labels = scales::percent)+
+  scale_y_continuous(labels = scales::percent)+
+  scale_color_manual(values=c('Original strategies' = '#000000', '2 combinations' = '#FF0000', 
+                              '3 combinations' = '#00FF00', '4 combinations' = '#0000FF', 
+                              '5 combinations' = '#FFA500'))+
+  theme_bw()+
+  theme(plot.title = element_text(size= 14, hjust = 0.5, face ="bold"), 
+        axis.text.x = element_text(angle = 90, hjust = 1, face = "bold"),
+        axis.text.y = element_text(angle = 90, hjust = 1, face = "bold"))
+
+
+
+# 26 strategies only
 ggplot(plot_df, aes(x=means_percent, y = var_percent))+
   geom_point()+
   labs(x='Mean', y="Variance", title="Mean and variance of all the investment strategies")+
