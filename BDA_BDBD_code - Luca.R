@@ -63,10 +63,21 @@ names(data_LT_rf_CHF)[1] <- "Dates"
 data_ST_rf_CHF <- data_ST_rf_CHF[, c('Dates', 'SARON close of trading')]
 CHF_rf_rates <- merge(data_ST_rf_CHF, data_LT_rf_CHF, by = "Dates", all = TRUE)
 
-# Remove from our  R environment the variables that we no longer need
+# Inspect the size of the downloaded data
+print(paste("data_indices_full (downloaded):", round(object.size(data_indices_full) / 1048576, 2), "MB"))
+print(paste("data_FX_full (downloaded):", round(object.size(data_FX_full) / 1048576, 2), "MB"))
+print(paste("data_inflation_full (downloaded):", round(object.size(data_inflation_full) / 1048576, 2), "MB"))
+print(paste("data_ST_rf_CHF (downloaded):", round(object.size(data_ST_rf_CHF) / 1048576, 2), "MB"))
+print(paste("data_ST_rf_CHF (downloaded):", round(object.size(data_ST_rf_CHF) / 1048576, 2), "MB"))
+
+# Remove from our R environment the variables that we no longer need
 rm(data_indices_full, data_FX_full, data_inflation_full, data_inflation, data_ST_rf_CHF, data_LT_rf_CHF)
 
-# Aligning dates across different data frames 
+# Inspect the size of the raw data that we continue from
+print(paste("index_prices_local_currency:", round(object.size(index_prices_local_currency) / 1048576, 2), "MB"))
+print(paste("CHF_FX:", round(object.size(CHF_FX) / 1048576, 2), "MB"))
+print(paste("CHF_rf_rates:", round(object.size(CHF_rf_rates) / 1048576, 2), "MB"))
+print(paste("swiss_inflation:", round(object.size(swiss_inflation) / 1048576, 2), "MB"))
 
 
 ##############################################################################
@@ -107,7 +118,6 @@ CHF_FX[is_char_or_factor] <- lapply(CHF_FX[is_char_or_factor], function(col) {
   ifelse(col == "#N/A N/A", NA, col)
 })
 
-
 # Determine indices that do not contain sufficiently long dated price data and are not essential to the investment universe
 index_prices_local_currency_NA_dates <- determine_start_dates(index_prices_local_currency)
 print(index_prices_local_currency_NA_dates)
@@ -144,7 +154,6 @@ CHF_FX <- CHF_FX %>%
     vars(-Dates),
     ~as.numeric(na_if(., ""))  # Convert non-empty strings to numeric
   )
-
 
 # For each geography, combine the three intermediate-term treasuries (3-5Y, 5-7Y, 7-10Y) into one investable security that is weighted 1/3 in each
 index_prices_local_currency <- index_prices_local_currency %>%
@@ -199,10 +208,16 @@ for (col in colnames(index_prices_CHF)[-1]) {
   returns <- (prices[1:(num_rows - 1)] / prices[2:num_rows]) - 1
   index_daily_returns_CHF[[col]] <- c(returns, NA)
 }
+
 index_daily_returns_CHF <- na.omit(index_daily_returns_CHF) # This removes the final row, which only contains returns of value NA
 
+# Inspect the size of the cleaned data that we continue from
+print(paste("index_daily_returns_CHF:", round(object.size(index_daily_returns_CHF) / 1048576, 2), "MB"))
+print(paste("CHF_FX:", round(object.size(CHF_FX) / 1048576, 2), "MB"))
+print(paste("CHF_rf_rates:", round(object.size(CHF_rf_rates) / 1048576, 2), "MB"))
+print(paste("swiss_inflation:", round(object.size(swiss_inflation) / 1048576, 2), "MB"))
 
-1##############################################################################
+##############################################################################
 
 # DATA PREPARATION
 
@@ -213,68 +228,16 @@ index_daily_returns_CHF <- na.omit(index_daily_returns_CHF) # This removes the f
 
 # Generating new columns (different investment strategies) from our daily index returns in CHF
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-##############################################################################
-##############################################################################
-##############################################################################
-
-
-
-
-
-# Import the excel file
-data <- read_excel("C:/Users/marco/Documents/HSG/Big Data/BDBD_data.xlsx")
-
-# Remove rows with NA
-data <- na.omit(data)
-
-#data$Dates <- as.Date(data$Dates)
-
-# Set the first column as row index
-#rownames(data) <- data[,1]
-
-# Remove the first column from the data frame
-data <- data[, -1]
-
-
-# Define a function to generate weighted columns
-generate_weighted_cols <- function(data, max_comb_size) {
-  # Get the number of columns in the dataframe
-  num_cols <- ncol(data)
+# Define a function that generates columns of equally-weighted indices, with daily rebalancing
+generate_weighted_cols <- function(index_returns, max_comb_size) {
+  # Start timer to later display how long the function took to run
+  start_time <- Sys.time()
+  
+  # Create a dataframe that contains the initial investment strategies (investing 100% in an index), without the Dates column
+  investment_strategies <- index_returns[, -1]
+  
+  # Get the number of columns (indices) in the dataframe
+  num_cols <- ncol(investment_strategies)
   
   # Iterate over i for i-combinations
   for (i in 2:min(num_cols, max_comb_size)) {
@@ -284,27 +247,76 @@ generate_weighted_cols <- function(data, max_comb_size) {
     # Iterate over each combination
     for (combo in combos) {
       # Calculate the new column as the row-wise mean of the selected columns
-      new_col <- rowMeans(data[, combo])
+      new_col <- rowMeans(investment_strategies[, combo])
       
       # Create the new column name
-      new_col_name <- paste(names(data)[combo], collapse = " ")
+      new_col_name <- paste(names(investment_strategies)[combo], collapse = " ")
       
       # Add the new column to the dataframe
-      data[[new_col_name]] <- new_col
+      index_returns[[new_col_name]] <- new_col
     }
   }
-  return(data)
+  
+  # Display how long the function took to run
+  end_time <- Sys.time()
+  execution_time <- as.numeric(end_time - start_time, units = "secs")
+  print(paste("Execution time: ", execution_time, "seconds"))
+  
+  return(index_returns)
 }
 
-# Use the function on your dataframe with max combination size 
-start_time <- Sys.time()
-data <- generate_weighted_cols(data, 5)
-end_time <- Sys.time()
-execution_time <- end_time - start_time
-print(execution_time)
+# Generate columns of equally-weighted indices, with daily rebalancing 
+strategies_max_2_comb_daily_rebal <- generate_weighted_cols(index_daily_returns_CHF, 2)
+strategies_max_3_comb_daily_rebal <- generate_weighted_cols(index_daily_returns_CHF, 3)
+strategies_max_4_comb_daily_rebal <- generate_weighted_cols(index_daily_returns_CHF, 4)
 
-# Check the size of the object
-print(object.size(data), units = "MB")
+# Inspect the size of the generated data that contains the different investment strategies
+print(paste("strategies_max_2_comb_daily_rebal (generated):", round(object.size(strategies_max_2_comb_daily_rebal) / 1048576, 2), "MB"))
+print(paste("strategies_max_3_comb_daily_rebal (generated):", round(object.size(strategies_max_3_comb_daily_rebal) / 1048576, 2), "MB"))
+print(paste("strategies_max_4_comb_daily_rebal (generated):", round(object.size(strategies_max_4_comb_daily_rebal) / 1048576, 2), "MB"))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+##############################################################################
+##############################################################################
+##############################################################################
+
+
+
+
+
+
+
 
 
 #### CPU optimisation ####
