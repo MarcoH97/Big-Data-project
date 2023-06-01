@@ -66,8 +66,6 @@ CHF_rf_rates <- merge(data_ST_rf_CHF, data_LT_rf_CHF, by = "Dates", all = TRUE)
 # Remove from our  R environment the variables that we no longer need
 rm(data_indices_full, data_FX_full, data_inflation_full, data_inflation, data_ST_rf_CHF, data_LT_rf_CHF)
 
-# Aligning dates across different data frames 
-
 
 ##############################################################################
 
@@ -116,10 +114,11 @@ print(index_prices_local_currency_NA_dates)
 # --> removing large cap equity indices (total stock market index already covers large- and mid-cap equity)
 # --> removing real estate index (insufficiently long dated price data)
 # --> removing 2 duplicates of I08240CH
-index_prices_local_currency <- index_prices_local_currency[, !(colnames(index_prices_local_currency) %in% c("MXCHMC Index", "MXEUMC Index", "MXUSMC Index", "MXEFMC Index", "MXWOMC Index", 
-                                                                                                            "MXUSLC Index", "MXEULC Index", "MXEFLC Index", "MXCHLC Index", "MXWOLC Index", 
-                                                                                                            "TENHGU Index", 
-                                                                                                            "I08240 Index", "I08240EU Index"))]
+index_prices_local_currency <- index_prices_local_currency[, !(colnames(index_prices_local_currency) %in% 
+                                                                 c("MXCHMC Index", "MXEUMC Index", "MXUSMC Index", "MXEFMC Index", "MXWOMC Index",
+                                                                   "MXUSLC Index", "MXEULC Index", "MXEFLC Index", "MXCHLC Index", "MXWOLC Index",
+                                                                   "TENHGU Index",
+                                                                   "I08240 Index", "I08240EU Index"))]
 
 # Determine currency pairs that do not contain sufficiently long dated price data and are not essential to the investment universe
 CHF_FX_NA_dates <- determine_start_dates(CHF_FX)
@@ -143,7 +142,6 @@ CHF_FX <- CHF_FX %>%
     vars(-Dates),
     ~as.numeric(na_if(., ""))  # Convert non-empty strings to numeric
   )
-
 
 # For each geography, combine the three intermediate-term treasuries (3-5Y, 5-7Y, 7-10Y) into one investable security that is weighted 1/3 in each
 index_prices_local_currency <- index_prices_local_currency %>%
