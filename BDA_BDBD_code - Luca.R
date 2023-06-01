@@ -275,6 +275,111 @@ print(paste("strategies_max_2_comb_daily_rebal (generated):", round(object.size(
 print(paste("strategies_max_3_comb_daily_rebal (generated):", round(object.size(strategies_max_3_comb_daily_rebal) / 1048576, 2), "MB"))
 print(paste("strategies_max_4_comb_daily_rebal (generated):", round(object.size(strategies_max_4_comb_daily_rebal) / 1048576, 2), "MB"))
 
+# EXTRA WAYS OF GENERATING THE EXTRA COLUMNS......
+# (using different periodic rebalancing techniques: e.g., daily/monthly/quarterly-semi-annually/annually)
+# (preferably as efficiently as possible, so that generating more combinations becomes possible / doesn't take toooooo long)
+
+# ..............
+# ..............
+# ..............
+# ..............
+# ..............
+# ..............
+# ..............
+# ..............
+# ..............
+# ..............
+# ..............
+# ..............
+# ..............
+# ..............
+# ..............
+# ..............
+
+
+##############################################################################
+
+# DATA ANALYSIS
+
+
+
+
+
+
+
+
+
+
+
+##############################################################################
+
+# DATA VISUALIZATION
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+##############################################################################
+
+# RESULTS
+# 
+
+
+
+
+
+
+
+
+
+
+
+##############################################################################
+
+# SCALING AND CLOUD DEPLOYMENT
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -311,13 +416,7 @@ print(paste("strategies_max_4_comb_daily_rebal (generated):", round(object.size(
 ##############################################################################
 ##############################################################################
 
-
-
-
-
-
-
-
+# MARCO'S WORK FOR THE PRESENTATION............
 
 #### CPU optimisation ####
 plan(multisession)  # use available cores for parallel processing
