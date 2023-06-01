@@ -299,7 +299,9 @@ print(paste("strategies_max_4_comb_daily_rebal (generated):", round(object.size(
 
 ##############################################################################
 
-# DATA ANALYSIS
+# DATA ANALYSIS AND VISUALIZATION
+
+# A small initial analysis: visualizing correlations between daily returns of the different indices. 
 
 
 
@@ -311,14 +313,26 @@ print(paste("strategies_max_4_comb_daily_rebal (generated):", round(object.size(
 
 
 
-##############################################################################
-
-# DATA VISUALIZATION
 
 
 
 
+# A larger, still simple analysis: calculating and visualizing mean returns and standard deviations for each of the candidate investment strategies. 
 
+
+
+
+
+
+
+
+
+
+
+
+# The most challenging analysis:
+# (a) determining the unique optimal strategy that corresponds exactly to a given user-specified set of investment parameters 
+# (b) evaluating the out-of-sample performance of such strategies.
 
 
 
@@ -338,7 +352,6 @@ print(paste("strategies_max_4_comb_daily_rebal (generated):", round(object.size(
 ##############################################################################
 
 # RESULTS
-# 
 
 
 
@@ -347,6 +360,12 @@ print(paste("strategies_max_4_comb_daily_rebal (generated):", round(object.size(
 
 
 
+
+
+# The description currently includes a placeholder for the specific machine learning algorithms and statistical methods used. 
+# Including details about which specific algorithms and methods were chosen, and the reasoning behind these choices, 
+# would provide a clearer picture of your approach and allow others to better understand your analysis. 
+# Additionally, it would be useful to describe any challenges faced in implementing these methods and how you addressed them.
 
 
 
