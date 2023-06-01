@@ -1,3 +1,4 @@
+# Assisted by ChatGPT (https://chat.openai.com/) while writing the code below.
 # Load packages
 library(combinat)
 library(foreach)
@@ -13,6 +14,248 @@ library(DBI)
 library(ggplot2)
 library(reshape2)
 library(scales)
+
+
+##############################################################################
+
+# Get the directory path of the current code file
+PATH <- dirname(rstudioapi::getSourceEditorContext()$path)
+
+# Set the working directory to that of the current code file 
+setwd(PATH)
+
+# Load functions file
+source("BDA_BDBD_functions - Luca.R")
+
+##############################################################################
+
+# DATA COLLECTION: leveraging data from multiple sources
+# Loading the raw data into R from different sources, each with different data formats.
+
+# Load raw data for prices of selected indices 
+data_indices_full <- read_excel("Bloomberg_Terminal-spreadsheet_builder.xlsx", sheet = 1, col_names = FALSE)
+index_prices_local_currency <- data_indices_full[7:nrow(data_indices_full), ]
+colnames(index_prices_local_currency) <- data_indices_full[4, ]
+names(index_prices_local_currency)[1] <- "Dates"
+index_prices_local_currency$Dates <- as.Date(as.numeric(index_prices_local_currency$Dates), origin = "1899-12-30")
+
+# Load raw data for prices of selected indices 
+data_FX_full <- read_excel("Bloomberg_Terminal-spreadsheet_builder.xlsx", sheet = 2, col_names = FALSE)
+CHF_FX <- data_FX_full[7:nrow(data_indices_full), ]
+colnames(CHF_FX) <- data_FX_full[4, ]
+names(CHF_FX)[1] <- "Dates"
+CHF_FX$Dates <- as.Date(as.numeric(CHF_FX$Dates), origin = "1899-12-30")
+
+# Load raw data for Swiss inflation (CPI in %)
+data_inflation_full <- read_excel("API_FP.CPI.TOTL.ZG_DS2_en_excel_v2_5454868.xls", sheet = 1, col_names = FALSE)
+data_inflation <- data.frame(t(data_inflation_full[4:nrow(data_inflation_full), ]))
+colnames(data_inflation) <- data_inflation[1, ]
+data_inflation <- data_inflation[-(1:4), ]
+names(data_inflation)[1] <- "Dates"
+swiss_inflation <- data_inflation[, c('Dates', 'Switzerland')]
+
+# Load and merge raw data for CHF money market rates and CHF spot interest rates on Swiss Confederation bond issues
+data_ST_rf_CHF <- read_excel("snb-chart-data-zimomach-en-all-20230502_1430.xlsx", skip = 15, col_names = TRUE)
+data_LT_rf_CHF <- read_excel("snb-chart-data-rendeidglfzch-en-all-20230502_1430.xlsx", skip = 15, col_names = TRUE)
+names(data_ST_rf_CHF)[1] <- "Dates"
+names(data_LT_rf_CHF)[1] <- "Dates"
+data_ST_rf_CHF <- data_ST_rf_CHF[, c('Dates', 'SARON close of trading')]
+CHF_rf_rates <- merge(data_ST_rf_CHF, data_LT_rf_CHF, by = "Dates", all = TRUE)
+
+# Remove from our  R environment the variables that we no longer need
+rm(data_indices_full, data_FX_full, data_inflation_full, data_inflation, data_ST_rf_CHF, data_LT_rf_CHF)
+
+# Aligning dates across different data frames 
+
+
+##############################################################################
+
+# DATA CLEANING AND DATA INTEGRATION
+
+class(index_prices_local_currency$Dates)
+class(CHF_FX$Dates)
+class(swiss_inflation$Dates)
+class(CHF_rf_rates$Dates)
+
+# Convert Dates to a Date object
+index_prices_local_currency$Dates <- as.Date(index_prices_local_currency$Dates)
+CHF_FX$Dates <- as.Date(CHF_FX$Dates)
+CHF_rf_rates$Dates <- as.Date(CHF_rf_rates$Dates)
+swiss_inflation$Dates <- as.Date(paste(swiss_inflation$Dates, "-01-01", sep = ""), format = "%Y-%m-%d")
+
+# Sort the data frames by the 'Dates' column in descending order (from most recent to older)
+index_prices_local_currency <- index_prices_local_currency[order(index_prices_local_currency$Dates, decreasing = TRUE),]
+CHF_FX <- CHF_FX[order(CHF_FX$Dates, decreasing = TRUE),]
+swiss_inflation <- swiss_inflation[order(swiss_inflation$Dates, decreasing = TRUE),]
+CHF_rf_rates <- CHF_rf_rates[order(CHF_rf_rates$Dates, decreasing = TRUE),]
+
+# Change the column name for Swiss inflation (CPI in %) and convert the data to actual percentages
+if (names(swiss_inflation)[2] == "Switzerland") {
+  names(swiss_inflation)[2] <- "Swiss inflation (CPI)"
+  swiss_inflation$"Swiss inflation (CPI)" <- as.numeric(swiss_inflation$"Swiss inflation (CPI)") / 100
+}
+
+# Convert "#N/A N/A" to NA (in character or factor columns only)
+is_char_or_factor <- sapply(index_prices_local_currency, function(col) is.character(col) | is.factor(col))
+index_prices_local_currency[is_char_or_factor] <- lapply(index_prices_local_currency[is_char_or_factor], function(col) {
+  ifelse(col == "#N/A N/A", NA, col)
+})
+is_char_or_factor <- sapply(CHF_FX, function(col) is.character(col) | is.factor(col))
+CHF_FX[is_char_or_factor] <- lapply(CHF_FX[is_char_or_factor], function(col) {
+  ifelse(col == "#N/A N/A", NA, col)
+})
+
+
+# Determine indices that do not contain sufficiently long dated price data and are not essential to the investment universe
+index_prices_local_currency_NA_dates <- determine_start_dates(index_prices_local_currency)
+print(index_prices_local_currency_NA_dates)
+
+# Remove indices (columns) that do not contain sufficiently long dated price data and are not essential to the investment universe
+# --> removing mid cap equity indices (insufficiently long dated price data for Switzerland, remove the corresponding index for other geographies, and total stock market index already covers large- and mid-cap equity)
+# --> removing large cap equity indices (total stock market index already covers large- and mid-cap equity)
+# --> removing real estate index (insufficiently long dated price data)
+# --> removing 2 duplicates of I08240CH
+index_prices_local_currency <- index_prices_local_currency[, !(colnames(index_prices_local_currency) %in% c("MXCHMC Index", "MXEUMC Index", "MXUSMC Index", "MXEFMC Index", "MXWOMC Index", 
+                                                                                                            "MXUSLC Index", "MXEULC Index", "MXEFLC Index", "MXCHLC Index", "MXWOLC Index", 
+                                                                                                            "TENHGU Index", 
+                                                                                                            "I08240 Index", "I08240EU Index"))]
+
+# Determine currency pairs that do not contain sufficiently long dated price data and are not essential to the investment universe
+CHF_FX_NA_dates <- determine_start_dates(CHF_FX)
+print(CHF_FX_NA_dates)
+
+# Remove currency pairs (columns) that do not contain sufficiently long dated price data and are not essential to the investment universe
+# NOT APPLICABLE
+
+# Provide better names to remaining columns of dataframes index_prices_local_currency and CHF_FX
+index_prices_local_currency <- rename_columns(index_prices_local_currency)
+CHF_FX <- rename_columns(CHF_FX)
+
+# Transform non-NA values from character to numeric
+index_prices_local_currency <- index_prices_local_currency %>%
+  mutate_at(
+    vars(-Dates),
+    ~as.numeric(na_if(., ""))  # Convert non-empty strings to numeric
+  )
+CHF_FX <- CHF_FX %>%
+  mutate_at(
+    vars(-Dates),
+    ~as.numeric(na_if(., ""))  # Convert non-empty strings to numeric
+  )
+
+
+# For each geography, combine the three intermediate-term treasuries (3-5Y, 5-7Y, 7-10Y) into one investable security that is weighted 1/3 in each
+index_prices_local_currency <- index_prices_local_currency %>%
+  mutate(`US IT treasuries (3-5Y, 5-7Y, 7-10Y)` = (`US IT treasuries 3-5Y` + `US IT treasuries 5-7Y` + `US IT treasuries 7-10Y`) / 3,
+         `Europe IT treasuries (3-5Y, 5-7Y, 7-10Y)` = (`Europe IT treasuries 3-5Y` + `Europe IT treasuries 5-7Y` + `Europe IT treasuries 7-10Y`) / 3,
+         `EM IT treasuries (3-5Y, 5-7Y, 7-10Y)` = (`EM IT treasuries 3-5Y` + `EM IT treasuries 5-7Y` + `EM IT treasuries 7-10Y`) / 3,
+         `Switzerland IT treasuries (3-5Y, 5-7Y, 7-10Y)` = (`Switzerland IT treasuries 3-5Y` + `Switzerland IT treasuries 5-7Y` + `Switzerland IT treasuries 7-10Y`) / 3,
+         `World IT treasuries (3-5Y, 5-7Y, 7-10Y)` = (`World IT treasuries 3-5Y` + `World IT treasuries 5-7Y` + `World IT treasuries 7-10Y`) / 3)
+
+# Remove the original intermediate-term treasuries columns
+index_prices_local_currency <- index_prices_local_currency %>%
+  select(-ends_with("3-5Y"), -ends_with("5-7Y"), -ends_with("7-10Y"))
+
+# Rearrange the indices (columns) to a more logical order
+index_prices_local_currency <- rearrange_columns(index_prices_local_currency)
+
+# Remove longer dated observations until each column contains values for each remaining date (row)
+# i.e. Filter the data frames to include only rows starting from the latest start date
+index_prices_local_currency <- filter(index_prices_local_currency, 
+                                      Dates > max(determine_start_dates(index_prices_local_currency)))
+CHF_FX <- filter(CHF_FX,
+                 Dates >= max(determine_start_dates(index_prices_local_currency)))
+CHF_rf_rates <- filter(CHF_rf_rates,
+                       Dates >= max(determine_start_dates(index_prices_local_currency)))
+
+# Generate dataframe containing index prices in CHF (calculated from index_prices_local_currency and CHF_FX)
+# Initialize dataframe that will contain index prices in CHF
+index_prices_CHF <- index_prices_local_currency
+# Select the columns representing USD, EUR, and CHF denominated indexes
+usd_indexes <- c("US", "US small cap", "Europe small cap", "EM", "EM small cap", "Switzerland small cap", "World", "World small cap", "US ST treasuries 1-3Y", "US IT treasuries (3-5Y, 5-7Y, 7-10Y)", "US LT treasuries 10Y+", "EM ST treasuries 1-3Y", "EM IT treasuries (3-5Y, 5-7Y, 7-10Y)", "EM LT treasuries 10Y+", "World ST treasuries 1-3Y", "World IT treasuries (3-5Y, 5-7Y, 7-10Y)", "World LT treasuries 10Y+", "Gold bullion")
+eur_indexes <- c("Europe", "Europe ST treasuries 1-3Y", "Europe IT treasuries (3-5Y, 5-7Y, 7-10Y)", "Europe LT treasuries 10Y+")
+chf_indexes <- c("Switzerland", "Switzerland ST treasuries 1-3Y", "Switzerland IT treasuries (3-5Y, 5-7Y, 7-10Y)", "Switzerland LT treasuries 10Y+")
+# Multiply USD denominated columns by CHF/USD exchange rate
+index_prices_CHF[, usd_indexes] <- index_prices_CHF[, usd_indexes] * CHF_FX[["CHF per USD"]]
+# Multiply EUR denominated columns by CHF/EUR exchange rate
+index_prices_CHF[, eur_indexes] <- index_prices_CHF[, eur_indexes] * CHF_FX[["CHF per EUR"]]
+
+# Inspect dataframe index_prices_CHF
+print(index_prices_CHF)
+colnames(index_prices_CHF)
+head(index_prices_CHF, 10)
+tail(index_prices_CHF, 10)
+
+# Generate dataframe containing daily price returns in CHF (calculated from index_prices_CHF)
+# Initialize dataframe that will contain daily price returns in CHF
+index_daily_returns_CHF <- data.frame(index_prices_CHF$Dates)
+names(index_daily_returns_CHF)[1] <- "Dates"
+# Calculate daily price returns for each index in CHF
+num_rows <- nrow(index_prices_CHF)
+for (col in colnames(index_prices_CHF)[-1]) {
+  prices <- index_prices_CHF[[col]]
+  returns <- (prices[1:(num_rows - 1)] / prices[2:num_rows]) - 1
+  index_daily_returns_CHF[[col]] <- c(returns, NA)
+}
+index_daily_returns_CHF <- na.omit(index_daily_returns_CHF) # This removes the final row, which only contains returns of value NA
+
+
+##############################################################################
+
+# DATA PREPARATION
+# Generating new columns from our dataframe "index_daily_returns_CHF" containing daily price returns in CHF
+# ...
+
+index_daily_returns_CHF <- index_daily_returns_CHF[, -1]
+
+# Define a function to generate weighted columns
+generate_weighted_cols <- function(index_daily_returns_CHF, max_comb_size) {
+  # Get the number of columns in the dataframe
+  num_cols <- ncol(index_daily_returns_CHF)
+  
+  # Iterate over i for i-combinations
+  for (i in 2:min(num_cols, max_comb_size)) {
+    # Generate all i-combinations of column indices
+    combos <- combinat::combn(1:num_cols, i, simplify = FALSE)
+    
+    # Iterate over each combination
+    for (combo in combos) {
+      # Calculate the new column as the row-wise mean of the selected columns
+      new_col <- rowMeans(index_daily_returns_CHF[, combo])
+      
+      # Create the new column name
+      new_col_name <- paste(names(index_daily_returns_CHF)[combo], collapse = " ")
+      
+      # Add the new column to the dataframe
+      index_daily_returns_CHF[[new_col_name]] <- new_col
+    }
+  }
+  return(index_daily_returns_CHF)
+}
+
+# Use the function on your dataframe with max combination size 
+start_time <- Sys.time()
+index_daily_returns_CHF <- generate_weighted_cols(index_daily_returns_CHF, 3)
+end_time <- Sys.time()
+execution_time <- end_time - start_time
+print(execution_time)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 # Get the directory path of the current code
