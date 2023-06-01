@@ -71,6 +71,7 @@ rm(data_indices_full, data_FX_full, data_inflation_full, data_inflation, data_ST
 
 # DATA CLEANING AND DATA INTEGRATION
 
+# Inspect classes of the  Dates columns of the different data frames 
 class(index_prices_local_currency$Dates)
 class(CHF_FX$Dates)
 class(swiss_inflation$Dates)
@@ -202,8 +203,14 @@ index_daily_returns_CHF <- na.omit(index_daily_returns_CHF) # This removes the f
 ##############################################################################
 
 # DATA PREPARATION
-# Generating new columns from our dataframe "index_daily_returns_CHF" containing daily price returns in CHF
-# ...
+
+# Feature engineering a large set of investment strategies (as separate columns). Strategies differ in: 
+# (a) their strategic asset allocation, i.e. different (equally-weighted) combinations of the 26 index return series.
+# (b) their rebalancing technique: periodic (e.g., daily/monthly/quarterly-semi-annually/annually) or threshold-based (e.g., 10%/20%/25% deviation from original weight)
+# Notice that, as we increase the number of combinations that we implement, the number of additional columns increases exponentially.
+
+# Generating new columns (different investment strategies) from our daily index returns in CHF
+
 
 
 
