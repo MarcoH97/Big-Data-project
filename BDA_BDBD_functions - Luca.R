@@ -129,4 +129,146 @@ rearrange_columns <- function(dataframe) {
   return(dataframe_rearranged)
 }
 
+# Define a function that generates columns of equally-weighted indices, with daily rebalancing
+generate_weighted_cols <- function(index_returns, max_comb_size) {
+  # Start timer to later display how long the function took to run
+  start_time <- Sys.time()
+  
+  # Create a dataframe that contains the initial investment strategies (investing 100% in an index), without the Dates column
+  investment_strategies <- index_returns[, -1]
+  
+  # Get the number of columns (indices) in the dataframe
+  num_cols <- ncol(investment_strategies)
+  
+  # Iterate over i for i-combinations
+  for (i in 2:min(num_cols, max_comb_size)) {
+    # Generate all i-combinations of column indices
+    combos <- combinat::combn(1:num_cols, i, simplify = FALSE)
+    
+    # Iterate over each combination
+    for (combo in combos) {
+      # Calculate the new column as the row-wise mean of the selected columns
+      new_col <- rowMeans(investment_strategies[, combo])
+      
+      # Create the new column name
+      new_col_name <- paste(names(investment_strategies)[combo], collapse = " | ")
+      
+      # Add the new column to the dataframe
+      index_returns[[new_col_name]] <- new_col
+    }
+  }
+  
+  # Display how long the function took to run
+  end_time <- Sys.time()
+  execution_time <- as.numeric(end_time - start_time, units = "secs")
+  print(paste("Execution time: ", execution_time, "seconds"))
+  
+  return(index_returns)
+}
 
+# Define a function that plots the correlation matrix between returns of different investment strategies (first column is "Dates")
+plot_correlation_matrix <- function(df_return_series) {
+  # Determine the correlations between returns of the 26 selected indices
+  correlation_matrix <- cor(df_return_series[, -1])
+  print(correlation_matrix)
+  
+  # Melt the correlation matrix to long format for ggplot2
+  melted_cormat <- melt(correlation_matrix)
+  
+  # Plot the correlation matrix between returns of the 26 selected indices
+  p <- ggplot(data = melted_cormat, aes(x=Var1, y=Var2, fill=value)) + 
+    geom_tile() +
+    scale_fill_gradient2(low = "blue", high = "red", mid = "white", 
+                         midpoint = 0, limit = c(-1,1), space = "Lab", 
+                         name="Pearson\nCorrelation") +
+    theme_minimal() + 
+    theme(axis.text.x = element_text(angle = 45, vjust = 1, 
+                                     size = 10, hjust = 1), 
+          axis.title = element_blank()) +
+    coord_fixed(ratio = 1/1.5)
+  
+  print(p)
+  
+  return()
+}
+
+# Define a function that plots the mean-variance graph for daily returns of all investment strategies in the data frame (first column is "Dates")
+plot_mean_variance_graph <- function(df_return_series) {
+  # Start timer to later display how long the function took to run
+  start_time <- Sys.time()
+  
+  # Determine the daily mean return and daily standard deviation 
+  mean_returns_daily <- colMeans(df_return_series[, -1])
+  std_daily <- apply(df_return_series[, -1], 2, sd)
+  
+  # Annualize means and standard deviations
+  mean_returns_annual <- (1 + mean_returns_daily)^252 - 1
+  std_annual <- std_daily * sqrt(252)
+  
+  # Create a dataframe that contains annualized mean returns and standard deviations of all these investment strategies
+  meanvar_plot_df <- data.frame(means=mean_returns_annual, sds=std_annual)
+  
+  # Add a new column for color
+  meanvar_plot_df$group <- NA
+  
+  # Assign group labels based on column number
+  if(nrow(meanvar_plot_df) > 83682) {
+    meanvar_plot_df$group[1:26] <- 'Original strategies'
+    meanvar_plot_df$group[27:351] <- '2 combinations'
+    meanvar_plot_df$group[352:2951] <- '3 combinations'
+    meanvar_plot_df$group[2952:17901] <- '4 combinations'
+    meanvar_plot_df$group[17902:83681] <- '5 combinations'
+    meanvar_plot_df$group[83682:313912] <- '6 combinations'
+    
+  }
+  else if(nrow(meanvar_plot_df) > 17902) {
+    meanvar_plot_df$group[1:26] <- 'Original strategies'
+    meanvar_plot_df$group[27:351] <- '2 combinations'
+    meanvar_plot_df$group[352:2951] <- '3 combinations'
+    meanvar_plot_df$group[2952:17901] <- '4 combinations'
+    meanvar_plot_df$group[17902:83681] <- '5 combinations'
+  }
+  else if(nrow(meanvar_plot_df) > 2952) {
+    meanvar_plot_df$group[1:26] <- 'Original strategies'
+    meanvar_plot_df$group[27:351] <- '2 combinations'
+    meanvar_plot_df$group[352:2951] <- '3 combinations'
+    meanvar_plot_df$group[2952:17901] <- '4 combinations'
+  }
+  else if(nrow(meanvar_plot_df) > 352) {
+    meanvar_plot_df$group[1:26] <- 'Original strategies'
+    meanvar_plot_df$group[27:351] <- '2 combinations'
+    meanvar_plot_df$group[352:2951] <- '3 combinations'
+  }
+  else if(nrow(meanvar_plot_df) > 27) {
+    meanvar_plot_df$group[1:26] <- 'Original strategies'
+    meanvar_plot_df$group[27:351] <- '2 combinations'
+    
+  }
+  else if(nrow(meanvar_plot_df) <= 26) {
+    meanvar_plot_df$group[1:26] <- 'Original strategies'
+  }
+  
+  # Plot with color aesthetic mapped to group
+  p <- ggplot(meanvar_plot_df, aes(x=mean_returns_annual, y = std_annual, color=group))+
+    geom_point(alpha=0.10)+
+    geom_smooth(method = "lm", se = FALSE, linetype = "solid") +
+    labs(x='Mean', y="Standard deviation", title="Annualized mean and standard deviation for each candidate investment strategy")+
+    scale_x_continuous(labels = scales::percent)+
+    scale_y_continuous(labels = scales::percent)+
+    scale_color_manual(values=c('Original strategies' = '#000000', '2 combinations' = '#00008B', 
+                                '3 combinations' = '#008000', '4 combinations' = '#FF0000', 
+                                '5 combinations' = '#4B0082', '6 combinations' = '#FF6600'))+
+    theme_bw()+
+    theme(plot.title = element_text(size= 14, hjust = 0.5, face ="bold"), 
+          axis.text.x = element_text(angle = 90, hjust = 1, face = "bold"),
+          axis.text.y = element_text(angle = 90, hjust = 1, face = "bold"))
+  
+  print(p)
+  
+  # Display how long the function took to run
+  end_time <- Sys.time()
+  execution_time <- as.numeric(end_time - start_time, units = "secs")
+  print(paste("Execution time: ", execution_time, "seconds"))
+  
+  return()
+}

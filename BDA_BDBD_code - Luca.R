@@ -226,56 +226,26 @@ print(paste("swiss_inflation:", round(object.size(swiss_inflation) / 1048576, 2)
 # (b) their rebalancing technique: periodic (e.g., daily/monthly/quarterly-semi-annually/annually) or threshold-based (e.g., 10%/20%/25% deviation from original weight)
 # Notice that, as we increase the number of combinations that we implement, the number of additional columns increases exponentially.
 
-# Generating new columns (different investment strategies) from our daily index returns in CHF
-
-# Define a function that generates columns of equally-weighted indices, with daily rebalancing
-generate_weighted_cols <- function(index_returns, max_comb_size) {
-  # Start timer to later display how long the function took to run
-  start_time <- Sys.time()
-  
-  # Create a dataframe that contains the initial investment strategies (investing 100% in an index), without the Dates column
-  investment_strategies <- index_returns[, -1]
-  
-  # Get the number of columns (indices) in the dataframe
-  num_cols <- ncol(investment_strategies)
-  
-  # Iterate over i for i-combinations
-  for (i in 2:min(num_cols, max_comb_size)) {
-    # Generate all i-combinations of column indices
-    combos <- combinat::combn(1:num_cols, i, simplify = FALSE)
-    
-    # Iterate over each combination
-    for (combo in combos) {
-      # Calculate the new column as the row-wise mean of the selected columns
-      new_col <- rowMeans(investment_strategies[, combo])
-      
-      # Create the new column name
-      new_col_name <- paste(names(investment_strategies)[combo], collapse = " ")
-      
-      # Add the new column to the dataframe
-      index_returns[[new_col_name]] <- new_col
-    }
-  }
-  
-  # Display how long the function took to run
-  end_time <- Sys.time()
-  execution_time <- as.numeric(end_time - start_time, units = "secs")
-  print(paste("Execution time: ", execution_time, "seconds"))
-  
-  return(index_returns)
-}
-
-# Generate columns of equally-weighted indices, with daily rebalancing 
+# Generate new columns (different investment strategies of equally-weighted indices) from our daily index returns in CHF
 strategies_max_2_comb_daily_rebal <- generate_weighted_cols(index_daily_returns_CHF, 2)
 strategies_max_3_comb_daily_rebal <- generate_weighted_cols(index_daily_returns_CHF, 3)
 strategies_max_4_comb_daily_rebal <- generate_weighted_cols(index_daily_returns_CHF, 4)
+
+# Inspect (a subset of) the generated dataframes
+head(strategies_max_2_comb_daily_rebal[, 1:30], 5)
+head(strategies_max_3_comb_daily_rebal[, 1:30], 5)
+head(strategies_max_4_comb_daily_rebal[, 1:30], 5)
+tail(strategies_max_2_comb_daily_rebal[, (ncol(strategies_max_2_comb_daily_rebal)-4):ncol(strategies_max_2_comb_daily_rebal)], 5)
+tail(strategies_max_3_comb_daily_rebal[, (ncol(strategies_max_3_comb_daily_rebal)-4):ncol(strategies_max_3_comb_daily_rebal)], 5)
+tail(strategies_max_4_comb_daily_rebal[, (ncol(strategies_max_4_comb_daily_rebal)-4):ncol(strategies_max_4_comb_daily_rebal)], 5)
 
 # Inspect the size of the generated data that contains the different investment strategies
 print(paste("strategies_max_2_comb_daily_rebal (generated):", round(object.size(strategies_max_2_comb_daily_rebal) / 1048576, 2), "MB"))
 print(paste("strategies_max_3_comb_daily_rebal (generated):", round(object.size(strategies_max_3_comb_daily_rebal) / 1048576, 2), "MB"))
 print(paste("strategies_max_4_comb_daily_rebal (generated):", round(object.size(strategies_max_4_comb_daily_rebal) / 1048576, 2), "MB"))
 
-# EXTRA WAYS OF GENERATING THE EXTRA COLUMNS......
+
+# BETTER WAYS OF GENERATING THE EXTRA COLUMNS......
 # (using different periodic rebalancing techniques: e.g., daily/monthly/quarterly-semi-annually/annually)
 # (preferably as efficiently as possible, so that generating more combinations becomes possible / doesn't take toooooo long)
 
@@ -301,41 +271,259 @@ print(paste("strategies_max_4_comb_daily_rebal (generated):", round(object.size(
 
 # DATA ANALYSIS AND VISUALIZATION
 
-# A small initial analysis: visualizing correlations between daily returns of the different indices. 
+# (1) A small initial analysis: visualizing correlations between daily returns of the different indices. 
+
+# Plot the correlation matrix between returns of the initial 26 indices
+plot_correlation_matrix(index_daily_returns_CHF)
 
 
+# (2) A larger, still simple analysis: calculating and visualizing mean returns and standard deviations for each of the candidate investment strategies. 
+
+# Plot the mean-variance graph for daily returns of each investment strategy in the data frame (first column is "Dates")
+# First for only the 26 initial variables, than for all combinations up to 2, than for all higher number of combinations.
+plot_mean_variance_graph(index_daily_returns_CHF)
+plot_mean_variance_graph(strategies_max_2_comb_daily_rebal)
+plot_mean_variance_graph(strategies_max_3_comb_daily_rebal)
+plot_mean_variance_graph(strategies_max_4_comb_daily_rebal)
 
 
+# (3) The most challenging analysis:
+# (3a) determining the unique optimal strategy that corresponds exactly to a given user-specified set of investment parameters 
+# (3b) evaluating the out-of-sample performance of such strategies.
+# -------------- (based on Marco's code) --------------
+
+#### Algo ####
+# Define function
+calculate_returns <- function(data, years, threshold) {
+  
+  # Calculate number of rows (days) per year
+  days_per_year <- 252  # typically there are 252 trading days in a year
+  
+  # Convert years to trading days
+  period <- years * days_per_year
+  
+  # Initialize output data frame
+  output <- data.frame(Column = character(),
+                       Worst_Period_End_Value = numeric(),
+                       stringsAsFactors = FALSE)
+  
+  # Iterate over each column
+  for (col in names(data)) {
+    
+    if (col == "Date") next  # skip Date column
+    
+    # Initialize worst period end value as infinity
+    worst_period_end_value <- Inf
+    
+    # Initialize flag indicating whether column dropped below threshold
+    below_threshold <- FALSE
+    
+    # Iterate over each day
+    for (i in 1:(nrow(data) - period + 1)) {
+      
+      # Calculate product of returns for the period
+      period_return <- prod(1 + data[i:(i + period - 1), col]) * 100
+      
+      # Check if period return dropped below threshold
+      if (period_return < threshold) {
+        below_threshold <- TRUE
+        break
+      }
+      
+      # Update worst period end value
+      worst_period_end_value <- min(worst_period_end_value, period_return)
+      
+    }
+    
+    # If column never dropped below threshold, add to output
+    if (!below_threshold) {
+      output <- rbind(output, data.frame(Column = col,
+                                         Worst_Period_End_Value = worst_period_end_value,
+                                         stringsAsFactors = FALSE))
+    }
+    
+  }
+  
+  # Return output
+  return(output)
+  
+}
+
+# Use function
+# Replace "10" and "100" with your desired years and threshold
+start_time <- Sys.time()
+result <- calculate_returns(data, 10, 85)
+end_time <- Sys.time()
+execution_time <- end_time - start_time
+print(execution_time)
 
 
+# Print result
+print(result)
+
+#### Algo parallel processing ####
+
+calculate_returns_single_column <- function(col_name, data, period, threshold) {
+  # Skip Date column
+  if (col_name == "Date") return(NULL)
+  
+  # Initialize worst period end value as infinity
+  worst_period_end_value <- Inf
+  
+  # Initialize flag indicating whether column dropped below threshold
+  below_threshold <- FALSE
+  
+  # Iterate over each day
+  for (i in 1:(nrow(data) - period + 1)) {
+    # Calculate product of returns for the period
+    period_return <- prod(1 + data[i:(i + period - 1), col_name]) * 100
+    
+    # Check if period return dropped below threshold
+    if (period_return < threshold) {
+      below_threshold <- TRUE
+      break
+    }
+    
+    # Update worst period end value
+    worst_period_end_value <- min(worst_period_end_value, period_return)
+  }
+  
+  # If column never dropped below threshold, return result
+  if (!below_threshold) {
+    return(data.frame(Column = col_name,
+                      Worst_Period_End_Value = worst_period_end_value,
+                      stringsAsFactors = FALSE))
+  } else {
+    return(NULL)
+  }
+}
+
+calculate_returns_parallel <- function(data, years, threshold) {
+  # Calculate number of rows (days) per year
+  days_per_year <- 252  # typically there are 252 trading days in a year
+  
+  # Convert years to trading days
+  period <- years * days_per_year
+  
+  # Create cluster with number of cores  
+  cl <- makeCluster(detectCores() - 1)
+  
+  # Export necessary objects to the workers
+  clusterExport(cl, c("data", "period", "threshold"))
+  
+  # Apply the function to each column in parallel
+  output <- parLapply(cl, names(data), calculate_returns_single_column)
+  
+  # Stop the cluster
+  stopCluster(cl)
+  
+  # Combine results and remove NULL results (columns that dropped below threshold)
+  output <- do.call("rbind", output)
+  
+  # Return output
+  return(output)
+}
+
+# Use function
+# Replace "10" and "85" with your desired years and threshold
+start_time <- Sys.time()
+result <- calculate_returns_parallel(data, 10, 85)
+end_time <- Sys.time()
+execution_time <- end_time - start_time
+print(execution_time)
 
 
+# Print result
+print(result)
+
+#### Algo test ####
+# Define function
+calculate_returns <- function(data, years, threshold) {
+  
+  # Calculate number of rows (days) per year
+  days_per_year <- 252
+  
+  # Convert years to trading days
+  period <- years * days_per_year
+  
+  # Initialize output data frame
+  output <- data.frame(Column = character(),
+                       Worst_Period_Start = numeric(),
+                       Worst_Period_End_Value = numeric(),
+                       stringsAsFactors = FALSE)
+  
+  # Iterate over each column
+  for (col in names(data)) {
+    
+    # Initialize worst period end value as infinity
+    worst_period_end_value <- Inf
+    worst_period_start <- 0
+    
+    # Initialize flag indicating whether column dropped below threshold
+    below_threshold <- FALSE
+    
+    # Iterate over each day
+    for (i in 1:(nrow(data) - period + 1)) {
+      
+      # Calculate product of returns for the period
+      period_return <- prod(1 + data[i:(i + period - 1), col]) * 100
+      
+      # Check if period return dropped below threshold
+      if (period_return < threshold) {
+        below_threshold <- TRUE
+        break1
+      }
+      
+      # Update worst period end value and its start
+      if (period_return < worst_period_end_value) {
+        worst_period_end_value <- period_return
+        worst_period_start <- i
+      }
+    }
+    
+    # If column never dropped below threshold, add to output
+    if (!below_threshold) {
+      output <- rbind(output, data.frame(Column = col,
+                                         Worst_Period_Start = worst_period_start,
+                                         Worst_Period_End_Value = worst_period_end_value,
+                                         stringsAsFactors = FALSE))
+    }
+  }
+  
+  # Return output
+  return(output)
+}
 
 
+# Use function
+result <- calculate_returns(data, 10, 85)
 
-
-
-
-
-# A larger, still simple analysis: calculating and visualizing mean returns and standard deviations for each of the candidate investment strategies. 
-
-
-
-
-
-
-
-
-
-
-
-
-# The most challenging analysis:
-# (a) determining the unique optimal strategy that corresponds exactly to a given user-specified set of investment parameters 
-# (b) evaluating the out-of-sample performance of such strategies.
-
-
-
+# Plot each surviving column's worst period
+for (i in 1:nrow(result)) {
+  
+  # Extract column name
+  col <- result$Column[i]
+  
+  # Extract start date of worst period
+  start <- result$Worst_Period_Start[i]
+  
+  # Calculate end date of worst period
+  end <- start + 10 * 252 - 1  # 10 years of trading days
+  
+  # Subset data for worst period
+  subset_data <- data.frame(Index = start:end, Value = data[start:end, col])
+  
+  # Plot time series
+  p <- ggplot(data = subset_data, aes(x = Index, y = Value)) +
+    geom_line() +
+    labs(title = paste("Worst period for", col), x = "Trading Days", y = col) +
+    theme_minimal() +
+    theme(plot.title = element_text(hjust = 0.5))
+  
+  # Print plot
+  print(p)
+  
+}
 
 
 
@@ -435,7 +623,12 @@ print(paste("strategies_max_4_comb_daily_rebal (generated):", round(object.size(
 ##############################################################################
 ##############################################################################
 
-# MARCO'S WORK FOR THE PRESENTATION............
+# MARCO'S WORK FOR THE PRESENTATION THAT IS STILL UNUSED ABOVE............
+
+
+
+
+
 
 #### CPU optimisation ####
 plan(multisession)  # use available cores for parallel processing
@@ -555,319 +748,9 @@ print(execution_time)
 print(object.size(data), units = "MB")
 
 
-#### Algo ####
-# Define function
-calculate_returns <- function(data, years, threshold) {
-  
-  # Calculate number of rows (days) per year
-  days_per_year <- 252  # typically there are 252 trading days in a year
-  
-  # Convert years to trading days
-  period <- years * days_per_year
-  
-  # Initialize output data frame
-  output <- data.frame(Column = character(),
-                       Worst_Period_End_Value = numeric(),
-                       stringsAsFactors = FALSE)
-  
-  # Iterate over each column
-  for (col in names(data)) {
-    
-    if (col == "Date") next  # skip Date column
-    
-    # Initialize worst period end value as infinity
-    worst_period_end_value <- Inf
-    
-    # Initialize flag indicating whether column dropped below threshold
-    below_threshold <- FALSE
-    
-    # Iterate over each day
-    for (i in 1:(nrow(data) - period + 1)) {
-      
-      # Calculate product of returns for the period
-      period_return <- prod(1 + data[i:(i + period - 1), col]) * 100
-      
-      # Check if period return dropped below threshold
-      if (period_return < threshold) {
-        below_threshold <- TRUE
-        break
-      }
-      
-      # Update worst period end value
-      worst_period_end_value <- min(worst_period_end_value, period_return)
-      
-    }
-    
-    # If column never dropped below threshold, add to output
-    if (!below_threshold) {
-      output <- rbind(output, data.frame(Column = col,
-                                         Worst_Period_End_Value = worst_period_end_value,
-                                         stringsAsFactors = FALSE))
-    }
-    
-  }
-  
-  # Return output
-  return(output)
-  
-}
-
-# Use function
-# Replace "10" and "100" with your desired years and threshold
-start_time <- Sys.time()
-result <- calculate_returns(data, 10, 85)
-end_time <- Sys.time()
-execution_time <- end_time - start_time
-print(execution_time)
-
-
-# Print result
-print(result)
-
-
-#### Algo parallel processing ####
-
-calculate_returns_single_column <- function(col_name, data, period, threshold) {
-  # Skip Date column
-  if (col_name == "Date") return(NULL)
-  
-  # Initialize worst period end value as infinity
-  worst_period_end_value <- Inf
-  
-  # Initialize flag indicating whether column dropped below threshold
-  below_threshold <- FALSE
-  
-  # Iterate over each day
-  for (i in 1:(nrow(data) - period + 1)) {
-    # Calculate product of returns for the period
-    period_return <- prod(1 + data[i:(i + period - 1), col_name]) * 100
-    
-    # Check if period return dropped below threshold
-    if (period_return < threshold) {
-      below_threshold <- TRUE
-      break
-    }
-    
-    # Update worst period end value
-    worst_period_end_value <- min(worst_period_end_value, period_return)
-  }
-  
-  # If column never dropped below threshold, return result
-  if (!below_threshold) {
-    return(data.frame(Column = col_name,
-                      Worst_Period_End_Value = worst_period_end_value,
-                      stringsAsFactors = FALSE))
-  } else {
-    return(NULL)
-  }
-}
-
-calculate_returns_parallel <- function(data, years, threshold) {
-  # Calculate number of rows (days) per year
-  days_per_year <- 252  # typically there are 252 trading days in a year
-  
-  # Convert years to trading days
-  period <- years * days_per_year
-  
-  # Create cluster with number of cores  
-  cl <- makeCluster(detectCores() - 1)
-  
-  # Export necessary objects to the workers
-  clusterExport(cl, c("data", "period", "threshold"))
-  
-  # Apply the function to each column in parallel
-  output <- parLapply(cl, names(data), calculate_returns_single_column)
-  
-  # Stop the cluster
-  stopCluster(cl)
-  
-  # Combine results and remove NULL results (columns that dropped below threshold)
-  output <- do.call("rbind", output)
-  
-  # Return output
-  return(output)
-}
-
-# Use function
-# Replace "10" and "85" with your desired years and threshold
-start_time <- Sys.time()
-result <- calculate_returns_parallel(data, 10, 85)
-end_time <- Sys.time()
-execution_time <- end_time - start_time
-print(execution_time)
-
-
-# Print result
-print(result)
 
 
 
-
-
-
-#### Algo test ####
-# Define function
-calculate_returns <- function(data, years, threshold) {
-  
-  # Calculate number of rows (days) per year
-  days_per_year <- 252
-  
-  # Convert years to trading days
-  period <- years * days_per_year
-  
-  # Initialize output data frame
-  output <- data.frame(Column = character(),
-                       Worst_Period_Start = numeric(),
-                       Worst_Period_End_Value = numeric(),
-                       stringsAsFactors = FALSE)
-  
-  # Iterate over each column
-  for (col in names(data)) {
-    
-    # Initialize worst period end value as infinity
-    worst_period_end_value <- Inf
-    worst_period_start <- 0
-    
-    # Initialize flag indicating whether column dropped below threshold
-    below_threshold <- FALSE
-    
-    # Iterate over each day
-    for (i in 1:(nrow(data) - period + 1)) {
-      
-      # Calculate product of returns for the period
-      period_return <- prod(1 + data[i:(i + period - 1), col]) * 100
-      
-      # Check if period return dropped below threshold
-      if (period_return < threshold) {
-        below_threshold <- TRUE
-        break1
-      }
-      
-      # Update worst period end value and its start
-      if (period_return < worst_period_end_value) {
-        worst_period_end_value <- period_return
-        worst_period_start <- i
-      }
-    }
-    
-    # If column never dropped below threshold, add to output
-    if (!below_threshold) {
-      output <- rbind(output, data.frame(Column = col,
-                                         Worst_Period_Start = worst_period_start,
-                                         Worst_Period_End_Value = worst_period_end_value,
-                                         stringsAsFactors = FALSE))
-    }
-  }
-  
-  # Return output
-  return(output)
-}
-
-
-# Use function
-result <- calculate_returns(data, 10, 85)
-
-# Plot each surviving column's worst period
-for (i in 1:nrow(result)) {
-  
-  # Extract column name
-  col <- result$Column[i]
-  
-  # Extract start date of worst period
-  start <- result$Worst_Period_Start[i]
-  
-  # Calculate end date of worst period
-  end <- start + 10 * 252 - 1  # 10 years of trading days
-  
-  # Subset data for worst period
-  subset_data <- data.frame(Index = start:end, Value = data[start:end, col])
-  
-  # Plot time series
-  p <- ggplot(data = subset_data, aes(x = Index, y = Value)) +
-    geom_line() +
-    labs(title = paste("Worst period for", col), x = "Trading Days", y = col) +
-    theme_minimal() +
-    theme(plot.title = element_text(hjust = 0.5))
-  
-  # Print plot
-  print(p)
-  
-}
-
-
-#### Data visualization ####
-# Plot the correlation matrix of all the returns
-correlation_matrix <- cor(data)
-print(correlation_matrix)
-
-# Melt the correlation matrix to long format for ggplot2
-melted_cormat <- melt(correlation_matrix)
-
-# Plot the correlation matrix
-ggplot(data = melted_cormat, aes(x=Var1, y=Var2, fill=value)) + 
-  geom_tile() +
-  scale_fill_gradient2(low = "blue", high = "red", mid = "white", 
-                       midpoint = 0, limit = c(-1,1), space = "Lab", 
-                       name="Pearson\nCorrelation") +
-  theme_minimal() + 
-  theme(axis.text.x = element_text(angle = 45, vjust = 1, 
-                                   size = 10, hjust = 1), 
-        axis.title = element_blank()) +
-  coord_fixed(ratio = 1/1.5)
-
-
-
-
-
-
-
-# PLot the mean-variance graph for the variables
-means <- colMeans(data)
-daily_sd <- apply(data, 2, sd)
-
-# Annualizing means
-annual_means <- (1 + means)^252 - 1
-# Annualize the standard deviation
-annual_sd <- daily_sd * sqrt(252)
-
-plot_df <- data.frame(means=annual_means, sds=annual_sd)
-
-# Add a new column for color
-plot_df$group <- NA
-# Assign group labels based on column number
-plot_df$group[1:26] <- 'Original strategies'
-plot_df$group[27:351] <- '2 combinations'
-plot_df$group[352:2951] <- '3 combinations'
-plot_df$group[2952:17901] <- '4 combinations'
-plot_df$group[17902:83681] <- '5 combinations'
-
-
-# Plot with color aesthetic mapped to group
-ggplot(plot_df, aes(x=annual_means, y = annual_sd, color=group))+
-  geom_point()+
-  labs(x='Mean', y="Standard deviation", title="Annualised mean and standard deviation of all the investment strategies")+
-  scale_x_continuous(labels = scales::percent)+
-  scale_y_continuous(labels = scales::percent)+
-  scale_color_manual(values=c('Original strategies' = '#000000', '2 combinations' = '#FF0000', 
-                              '3 combinations' = '#00FF00', '4 combinations' = '#0000FF', 
-                              '5 combinations' = '#FFA500'))+
-  theme_bw()+
-  theme(plot.title = element_text(size= 14, hjust = 0.5, face ="bold"), 
-        axis.text.x = element_text(angle = 90, hjust = 1, face = "bold"),
-        axis.text.y = element_text(angle = 90, hjust = 1, face = "bold"))
-
-
-
-# 26 strategies only
-ggplot(plot_df, aes(x=means_percent, y = var_percent))+
-  geom_point()+
-  labs(x='Mean', y="Variance", title="Mean and variance of all the investment strategies")+
-  scale_x_continuous(labels = percent)+
-  scale_y_continuous(labels = percent)+
-  theme_bw()+
-  theme(plot.title = element_text(size= 14, hjust = 0.5, face ="bold"), 
-        axis.text.x = element_text(angle = 90, hjust = 1, face = "bold"),
-        axis.text.y = element_text(angle = 90, hjust = 1, face = "bold"))
 
 
 # Plot the runtime differences
@@ -906,3 +789,4 @@ file_size2 <- c(14, 115, 694, 3245, 12171, 37675, 98248, 219394, 425342)
 
 # Create the dataframe
 size_df <- data.frame(Combinations = combinations2, Columns = columns2, File_Size_MB = file_size2)
+
