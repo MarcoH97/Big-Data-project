@@ -242,6 +242,86 @@ print(execution_time)
 
 
 
+#### Algo ####
+# Define function
+calculate_returns <- function(index_daily_returns_CHF, years, threshold) {
+  
+  # Calculate number of rows (days) per year
+  days_per_year <- 252  # typically there are 252 trading days in a year
+  
+  # Convert years to trading days
+  period <- years * days_per_year
+  
+  # Initialize output data frame
+  output <- data.frame(Column = character(),
+                       Worst_Period_End_Value = numeric(),
+                       stringsAsFactors = FALSE)
+  
+  # Iterate over each column
+  for (col in names(index_daily_returns_CHF)) {
+    
+    if (col == "Date") next  # skip Date column
+    
+    # Initialize worst period end value as infinity
+    worst_period_end_value <- Inf
+    
+    # Initialize flag indicating whether column dropped below threshold
+    below_threshold <- FALSE
+    
+    # Iterate over each day
+    for (i in 1:(nrow(index_daily_returns_CHF) - period + 1)) {
+      
+      # Calculate product of returns for the period
+      period_return <- prod(1 + index_daily_returns_CHF[i:(i + period - 1), col]) * 100
+      
+      # Check if period return dropped below threshold
+      if (period_return < threshold) {
+        below_threshold <- TRUE
+        break
+      }
+      
+      # Update worst period end value
+      worst_period_end_value <- min(worst_period_end_value, period_return)
+      
+    }
+    
+    # If column never dropped below threshold, add to output
+    if (!below_threshold) {
+      output <- rbind(output, data.frame(Column = col,
+                                         Worst_Period_End_Value = worst_period_end_value,
+                                         stringsAsFactors = FALSE))
+    }
+    
+  }
+  
+  # Return output
+  return(output)
+  
+}
+
+# Use function
+# Replace "10" and "100" with your desired years and threshold
+start_time <- Sys.time()
+result <- calculate_returns(index_daily_returns_CHF, 10, 85)
+end_time <- Sys.time()
+execution_time <- end_time - start_time
+print(execution_time)
+
+
+# Print result
+print(result)
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
