@@ -19,7 +19,11 @@ library(zoo)
 library(gridExtra)
 
 
-##############################################################################
+####
+####
+####
+####
+####
 
 # Get the directory path of the current code file
 PATH <- dirname(rstudioapi::getSourceEditorContext()$path)
@@ -30,9 +34,14 @@ setwd(PATH)
 # Load functions file
 source("BDA_BDBD_functions - Luca.R")
 
-##############################################################################
 
-# DATA COLLECTION: leveraging data from multiple sources
+####
+####
+####
+####
+####
+
+#### DATA COLLECTION: leveraging data from multiple sources ####
 # Loading the raw data into R from different sources, each with different data formats.
 
 # Load raw data for prices of selected indices 
@@ -82,9 +91,13 @@ print(paste("CHF_rf_rates:", round(object.size(CHF_rf_rates) / 1048576, 2), "MB"
 print(paste("swiss_inflation:", round(object.size(swiss_inflation) / 1048576, 2), "MB"))
 
 
-##############################################################################
+####
+####
+####
+####
+####
 
-# DATA CLEANING AND DATA INTEGRATION
+#### DATA CLEANING AND DATA INTEGRATION ####
 
 # Inspect classes of the Dates columns of the different data frames 
 class(index_prices_local_currency$Dates)
@@ -229,9 +242,14 @@ print(paste("CHF_FX:", round(object.size(CHF_FX) / 1048576, 2), "MB"))
 print(paste("CHF_rf_rates:", round(object.size(CHF_rf_rates) / 1048576, 2), "MB"))
 print(paste("swiss_inflation:", round(object.size(swiss_inflation) / 1048576, 2), "MB"))
 
-##############################################################################
 
-# DATA PREPARATION
+####
+####
+####
+####
+####
+
+#### DATA PREPARATION ####
 
 # Feature engineering a large set of investment strategies (as separate columns). Strategies differ in: 
 # (a) their strategic asset allocation, i.e. different (equally-weighted) combinations of the 26 index return series.
@@ -239,9 +257,24 @@ print(paste("swiss_inflation:", round(object.size(swiss_inflation) / 1048576, 2)
 # Notice that, as we increase the number of combinations that we implement, the number of additional columns increases exponentially.
 
 # Generate new columns (different investment strategies of equally-weighted indices) from our daily index returns in CHF
-strategies_max_2_comb_daily_rebal <- generate_weighted_cols(index_daily_returns_CHF, 2)
-strategies_max_3_comb_daily_rebal <- generate_weighted_cols(index_daily_returns_CHF, 3)
-strategies_max_4_comb_daily_rebal <- generate_weighted_cols(index_daily_returns_CHF, 4)
+strategies_max_2_comb_daily_rebal <- generate_weighted_cols_daily_rebal(index_daily_returns_CHF, 2)
+strategies_max_3_comb_daily_rebal <- generate_weighted_cols_daily_rebal(index_daily_returns_CHF, 3)
+strategies_max_4_comb_daily_rebal <- generate_weighted_cols_daily_rebal(index_daily_returns_CHF, 4)
+# strategies_max_5_comb_daily_rebal <- generate_weighted_cols_daily_rebal(index_daily_returns_CHF, 5)
+
+
+# ------------------------------------------------------------------------------------------------ #
+
+#### (PRIORITY 2) TO RUN THE FOLLOWING LINES OF CODE: figure out (TO DO): ####
+# --> LUCA: a flexible "generate_weighted_cols" function (for different possible periodic rebalancing techniques), that is also computationally efficient
+# --> LUCA: a more computationally efficient "generate_weighted_cols_daily_rebal" and (flexible) "generate_weighted_cols" function;
+# --> MARCO/ARIQ(2) big data methods (parallel processing / cloud services) for extra computational efficiency (storage + processing) 
+
+# strategies_max_5_comb_daily_rebal <- generate_weighted_cols_daily_rebal(index_daily_returns_CHF, 5)
+# strategies_max_6_comb_daily_rebal <- generate_weighted_cols_daily_rebal(index_daily_returns_CHF, 6)
+
+# ------------------------------------------------------------------------------------------------ #
+
 
 # Inspect (a subset of) the generated dataframes
 head(strategies_max_2_comb_daily_rebal[, 1:30], 5)
@@ -257,39 +290,21 @@ print(paste("strategies_max_3_comb_daily_rebal (generated):", round(object.size(
 print(paste("strategies_max_4_comb_daily_rebal (generated):", round(object.size(strategies_max_4_comb_daily_rebal) / 1048576, 2), "MB"))
 
 
-# BETTER WAYS OF GENERATING THE EXTRA COLUMNS......
-# (using different periodic rebalancing techniques: e.g., daily/monthly/quarterly-semi-annually/annually)
-# (preferably as efficiently as possible, so that generating more combinations becomes possible / doesn't take toooooo long)
+####
+####
+####
+####
+####
 
-# ..............
-# ..............
-# ..............
-# ..............
-# ..............
-# ..............
-# ..............
-# ..............
-# ..............
-# ..............
-# ..............
-# ..............
-# ..............
-# ..............
-# ..............
-# ..............
+#### DATA ANALYSIS AND VISUALIZATION ####
 
-
-##############################################################################
-
-# DATA ANALYSIS AND VISUALIZATION
-
-# (1) A small initial analysis: visualizing correlations between daily returns of the different indices. 
+# (PART 1) A small initial analysis: visualizing correlations between daily returns of the different indices. 
 
 # Plot the correlation matrix between returns of the initial 26 indices
 plot_correlation_matrix(index_daily_returns_CHF)
 
 
-# (2) A larger, still simple analysis: calculating and visualizing mean returns and standard deviations for each of the candidate investment strategies. 
+# (PART 2) A larger, still simple analysis: calculating and visualizing mean returns and standard deviations for each of the candidate investment strategies. 
 
 # Plot the mean-variance graph for daily returns of each investment strategy in the data frame (first column is "Dates")
 # First for only the 26 initial variables, than for all combinations up to 2, than for all higher number of combinations.
@@ -303,8 +318,10 @@ plot_mean_variance_graph(strategies_max_4_comb_daily_rebal)
 
 # ------------------------------------------------------------------------------------------------------#
 
+#### SAVE CURRENT WORKSPACE / LOAD CURRENT WORKSPACE ####
+
 # Save all objects in the workspace to a file named 'my_workspace.RData'
-# save.image('my_workspace.RData')
+save.image('my_workspace.RData')
 # Load the objects from 'my_workspace.RData' into the workspace
 # It's a good practice to start a new session or clear the workspace before loading the saved objects.
 load('my_workspace.RData')
@@ -313,24 +330,21 @@ source("BDA_BDBD_functions - Luca.R")
 
 # ------------------------------------------------------------------------------------------------------#
 
-# (3) The most challenging analysis:
-# (3a) determining the unique optimal strategy that corresponds exactly to a given user-specified set of investment parameters 
 
+# (PART 3) The most challenging analysis:
+# (PART 3A) determining the unique optimal strategy that corresponds exactly to a given user-specified set of investment parameters 
 
 # Determine for a specified time horizon and a specified minimum acceptable percentage value (minimum threshold):
 # [1] for each investment strategy, the lowest cumulative return out of all historic time periods that corresponds to the specified time horizon; 
 # [2] which investment strategies should be refused because their value dropped below the minimum threshold at any point over any historic time period that corresponds to the specified time horizon (group 2 strategies)
 # [3] a plot that displays (i) the intermediate evolution of the lowest cumulative return series for each investment strategy (different colors for non-refused "group 1 strategies", and refused "group 2 strategies"), for each separate time period's first day until its final day, and (ii) a horizontal dashed line that shows the minimum threshold
 
-# Set input parameters for function determine_optimal_strategy
-your_df_return_series = index_daily_returns_CHF
-your_time_horizon_years = 10
-your_minimum_allowable_percentage = 0.75
-
 # Call function determine_optimal_strategy
 # Note: function "determine_optimal_strategy" returns 4 objects: list(df_above_threshold, df_excluded, plot_list_different_periods_within_strategies, plot_lowest_cum_returns
-# ----- COMPUTATIONALLY HEAVY -----
-your_candidate_strategies_results <- determine_optimal_strategy(your_df_return_series, your_time_horizon_years, your_minimum_allowable_percentage)
+# ----- COMPUTATIONALLY INEFFICIENT -----
+your_candidate_strategies_results <- determine_optimal_strategy(df_return_series = index_daily_returns_CHF, 
+                                                                time_horizon_years = 10, 
+                                                                minimum_allowable_percentage = 0.75)
 
 # Extract separate results from that is contained in your_candidate_strategies_results (results from function determine_optimal_strategy)
 your_strategies_above_threshold <- your_candidate_strategies_results[[1]]
@@ -351,7 +365,7 @@ print(your_strategies_below_threshold)
 # your_plots_for_each_strategy
 # (1) To access a specific plot from the plot list your_plots_for_each_strategy, you would index it using the strategy name as follows:
 # In the place of "Strategy Name", use the exact name of the strategy you're interested in, like "US", "Europe", "World", etc.
-specific_plot = your_plots_for_each_strategy[["US"]]
+specific_plot = your_plots_for_each_strategy[["Gold bullion"]]
 print(specific_plot)
 
 # (2) If you would like to display multiple plots together, you can use the gridExtra package. 
@@ -369,6 +383,26 @@ grid.arrange(
 print(your_plot_lowest_returns_for_each_strategy)
 
 
+# ------------------------------------------------------------------------------------------------ #
+
+#### (PRIORITY 1) TO RUN THE FOLLOWING LINES OF CODE: figure out (TO DO): ####
+# --> LUCA: a more computationally efficient "determine_optimal_strategy" function; 
+# --> MARCO/ARIQ(2) big data methods (parallel processing / cloud services) for extra computational efficiency (storage + processing) --> 
+
+# your_candidate_strategies_results_2 <- determine_optimal_strategy(df_return_series = strategies_max_2_comb_daily_rebal, 
+#                                                                   time_horizon_years = 5, 
+#                                                                   minimum_allowable_percentage = 0.75)
+# your_candidate_strategies_results_3 <- determine_optimal_strategy(df_return_series = strategies_max_3_comb_daily_rebal, 
+#                                                                   time_horizon_years = 10, 
+#                                                                   minimum_allowable_percentage = 0.75)
+# your_candidate_strategies_results_4 <- determine_optimal_strategy(df_return_series = strategies_max_4_comb_daily_rebal, 
+#                                                                   time_horizon_years = 10, 
+#                                                                   minimum_allowable_percentage = 0.75)
+# your_candidate_strategies_results_5 <- determine_optimal_strategy(df_return_series = strategies_max_5_comb_daily_rebal, 
+#                                                                   time_horizon_years = 10, 
+#                                                                   minimum_allowable_percentage = 0.75)
+
+# ------------------------------------------------------------------------------------------------ #
 
 
 
@@ -401,7 +435,24 @@ print(your_plot_lowest_returns_for_each_strategy)
 
 
 
-#### Algo parallel processing ####
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#### STILL MARCOS CODE FOR THE PRESENTATION
+
+### Algo parallel processing ###
 
 calculate_returns_single_column <- function(col_name, data, period, threshold) {
   # Skip Date column
@@ -476,7 +527,7 @@ print(execution_time)
 # Print result
 print(result)
 
-#### Algo test ####
+### Algo test ###
 # Define function
 calculate_returns <- function(data, years, threshold) {
   
@@ -570,7 +621,7 @@ for (i in 1:nrow(result)) {
 
 
 
-# (3b) evaluating the out-of-sample performance of such strategies.
+# (PART 3B) evaluating the out-of-sample performance of such strategies.
 # ..................
 # ..................
 # ..................
@@ -588,7 +639,11 @@ for (i in 1:nrow(result)) {
 
 
 
-##############################################################################
+####
+####
+####
+####
+####
 
 # RESULTS
 
@@ -608,7 +663,11 @@ for (i in 1:nrow(result)) {
 
 
 
-##############################################################################
+####
+####
+####
+####
+####
 
 # SCALING AND CLOUD DEPLOYMENT
 
@@ -670,9 +729,11 @@ for (i in 1:nrow(result)) {
 
 
 
-##############################################################################
-##############################################################################
-##############################################################################
+####
+####
+####
+####
+####
 
 # MARCO'S WORK FOR THE PRESENTATION THAT IS STILL UNUSED ABOVE............
 
@@ -681,7 +742,7 @@ for (i in 1:nrow(result)) {
 
 
 
-#### CPU optimisation ####
+### CPU optimisation ###
 plan(multisession)  # use available cores for parallel processing
 handlers(global = TRUE)
 # options(future.globals.maxSize = 1024 * 1024 * 1024) # Crashes R, don't uncomment!
@@ -732,7 +793,7 @@ print(execution_time)
 # Check the size of the object
 print(object.size(data), units = "MB")
 
-#### SQLite ####
+### SQLite ###
 sanitize_column_name <- function(name) {
   # Remove or replace special characters
   name <- gsub("`", "", name)

@@ -1,3 +1,5 @@
+# Assisted by ChatGPT (https://chat.openai.com/) while writing the code below.
+
 # Load packages
 library(combinat)
 library(foreach)
@@ -13,253 +15,444 @@ library(DBI)
 library(ggplot2)
 library(reshape2)
 library(scales)
+library(zoo)
+library(gridExtra)
 
 
-# Get the directory path of the current code
+####
+####
+####
+####
+####
+
+# Get the directory path of the current code file
 PATH <- dirname(rstudioapi::getSourceEditorContext()$path)
-# Set the working directory to where the code is 
+
+# Set the working directory to that of the current code file 
 setwd(PATH)
 
-# Import the excel file
-data <- read_excel("C:/Users/marco/Documents/HSG/Big Data/BDBD_data.xlsx")
-
-# Remove rows with NA
-data <- na.omit(data)
-
-#data$Dates <- as.Date(data$Dates)
-
-# Set the first column as row index
-#rownames(data) <- data[,1]
-
-# Remove the first column from the data frame
-data <- data[, -1]
+# Load functions file
+source("BDA_BDBD_functions - combined.R")
 
 
-# Define a function to generate weighted columns
-generate_weighted_cols <- function(data, max_comb_size) {
-  # Get the number of columns in the dataframe
-  num_cols <- ncol(data)
-  
-  # Iterate over i for i-combinations
-  for (i in 2:min(num_cols, max_comb_size)) {
-    # Generate all i-combinations of column indices
-    combos <- combinat::combn(1:num_cols, i, simplify = FALSE)
-    
-    # Iterate over each combination
-    for (combo in combos) {
-      # Calculate the new column as the row-wise mean of the selected columns
-      new_col <- rowMeans(data[, combo])
-      
-      # Create the new column name
-      new_col_name <- paste(names(data)[combo], collapse = " ")
-      
-      # Add the new column to the dataframe
-      data[[new_col_name]] <- new_col
-    }
-  }
-  return(data)
+####
+####
+####
+####
+####
+
+#### DATA COLLECTION: leveraging data from multiple sources ####
+# Loading the raw data into R from different sources, each with different data formats.
+
+# Load raw data for prices of selected indices 
+data_indices_full <- read_excel("Bloomberg_Terminal-spreadsheet_builder.xlsx", sheet = 1, col_names = FALSE)
+index_prices_local_currency <- data_indices_full[7:nrow(data_indices_full), ]
+colnames(index_prices_local_currency) <- data_indices_full[4, ]
+names(index_prices_local_currency)[1] <- "Dates"
+index_prices_local_currency$Dates <- as.Date(as.numeric(index_prices_local_currency$Dates), origin = "1899-12-30")
+
+# Load raw data for prices of selected indices 
+data_FX_full <- read_excel("Bloomberg_Terminal-spreadsheet_builder.xlsx", sheet = 2, col_names = FALSE)
+CHF_FX <- data_FX_full[7:nrow(data_indices_full), ]
+colnames(CHF_FX) <- data_FX_full[4, ]
+names(CHF_FX)[1] <- "Dates"
+CHF_FX$Dates <- as.Date(as.numeric(CHF_FX$Dates), origin = "1899-12-30")
+
+# Load raw data for Swiss inflation (CPI in %)
+data_inflation_full <- read_excel("API_FP.CPI.TOTL.ZG_DS2_en_excel_v2_5454868.xls", sheet = 1, col_names = FALSE)
+data_inflation <- data.frame(t(data_inflation_full[4:nrow(data_inflation_full), ]))
+colnames(data_inflation) <- data_inflation[1, ]
+data_inflation <- data_inflation[-(1:4), ]
+names(data_inflation)[1] <- "Dates"
+swiss_inflation <- data_inflation[, c('Dates', 'Switzerland')]
+
+# Load and merge raw data for CHF money market rates and CHF spot interest rates on Swiss Confederation bond issues
+data_ST_rf_CHF <- read_excel("snb-chart-data-zimomach-en-all-20230502_1430.xlsx", skip = 15, col_names = TRUE)
+data_LT_rf_CHF <- read_excel("snb-chart-data-rendeidglfzch-en-all-20230502_1430.xlsx", skip = 15, col_names = TRUE)
+names(data_ST_rf_CHF)[1] <- "Dates"
+names(data_LT_rf_CHF)[1] <- "Dates"
+data_ST_rf_CHF <- data_ST_rf_CHF[, c('Dates', 'SARON close of trading')]
+CHF_rf_rates <- merge(data_ST_rf_CHF, data_LT_rf_CHF, by = "Dates", all = TRUE)
+
+# Inspect the size of the downloaded data
+print(paste("data_indices_full (downloaded):", round(object.size(data_indices_full) / 1048576, 2), "MB"))
+print(paste("data_FX_full (downloaded):", round(object.size(data_FX_full) / 1048576, 2), "MB"))
+print(paste("data_inflation_full (downloaded):", round(object.size(data_inflation_full) / 1048576, 2), "MB"))
+print(paste("data_ST_rf_CHF (downloaded):", round(object.size(data_ST_rf_CHF) / 1048576, 2), "MB"))
+print(paste("data_ST_rf_CHF (downloaded):", round(object.size(data_ST_rf_CHF) / 1048576, 2), "MB"))
+
+# Remove from our R environment the variables that we no longer need
+rm(data_indices_full, data_FX_full, data_inflation_full, data_inflation, data_ST_rf_CHF, data_LT_rf_CHF)
+
+# Inspect the size of the raw data that we continue from
+print(paste("index_prices_local_currency:", round(object.size(index_prices_local_currency) / 1048576, 2), "MB"))
+print(paste("CHF_FX:", round(object.size(CHF_FX) / 1048576, 2), "MB"))
+print(paste("CHF_rf_rates:", round(object.size(CHF_rf_rates) / 1048576, 2), "MB"))
+print(paste("swiss_inflation:", round(object.size(swiss_inflation) / 1048576, 2), "MB"))
+
+
+####
+####
+####
+####
+####
+
+#### DATA CLEANING AND DATA INTEGRATION ####
+
+# Inspect classes of the Dates columns of the different data frames 
+class(index_prices_local_currency$Dates)
+class(CHF_FX$Dates)
+class(swiss_inflation$Dates)
+class(CHF_rf_rates$Dates)
+
+# Convert Dates to a Date object
+index_prices_local_currency$Dates <- as.Date(index_prices_local_currency$Dates)
+CHF_FX$Dates <- as.Date(CHF_FX$Dates)
+CHF_rf_rates$Dates <- as.Date(CHF_rf_rates$Dates)
+swiss_inflation$Dates <- as.Date(paste(swiss_inflation$Dates, "-01-01", sep = ""), format = "%Y-%m-%d")
+
+# Sort the data frames by the 'Dates' column in descending order (from most recent to older)
+index_prices_local_currency <- index_prices_local_currency[order(index_prices_local_currency$Dates, decreasing = TRUE),]
+CHF_FX <- CHF_FX[order(CHF_FX$Dates, decreasing = TRUE),]
+swiss_inflation <- swiss_inflation[order(swiss_inflation$Dates, decreasing = TRUE),]
+CHF_rf_rates <- CHF_rf_rates[order(CHF_rf_rates$Dates, decreasing = TRUE),]
+
+# Change the column name for Swiss inflation (CPI in %) and convert the data to actual percentages
+if (names(swiss_inflation)[2] == "Switzerland") {
+  names(swiss_inflation)[2] <- "Swiss inflation (CPI)"
+  swiss_inflation$"Swiss inflation (CPI)" <- as.numeric(swiss_inflation$"Swiss inflation (CPI)") / 100
 }
 
-# Use the function on your dataframe with max combination size 
-start_time <- Sys.time()
-data <- generate_weighted_cols(data, 5)
-end_time <- Sys.time()
-execution_time <- end_time - start_time
-print(execution_time)
+# Convert "#N/A N/A" to NA (in character or factor columns only)
+is_char_or_factor <- sapply(index_prices_local_currency, function(col) is.character(col) | is.factor(col))
+index_prices_local_currency[is_char_or_factor] <- lapply(index_prices_local_currency[is_char_or_factor], function(col) {
+  ifelse(col == "#N/A N/A", NA, col)
+})
+is_char_or_factor <- sapply(CHF_FX, function(col) is.character(col) | is.factor(col))
+CHF_FX[is_char_or_factor] <- lapply(CHF_FX[is_char_or_factor], function(col) {
+  ifelse(col == "#N/A N/A", NA, col)
+})
 
-# Check the size of the object
-print(object.size(data), units = "MB")
+# Determine indices that do not contain sufficiently long dated price data and are not essential to the investment universe
+index_prices_local_currency_NA_dates <- determine_start_dates(index_prices_local_currency)
+print(index_prices_local_currency_NA_dates)
 
+# Remove indices (columns) that do not contain sufficiently long dated price data and are not essential to the investment universe
+# --> removing mid cap equity indices (insufficiently long dated price data for Switzerland, remove the corresponding index for other geographies, and total stock market index already covers large- and mid-cap equity)
+# --> removing large cap equity indices (total stock market index already covers large- and mid-cap equity)
+# --> removing real estate index (insufficiently long dated price data)
+# --> removing 2 duplicates of I08240CH
+index_prices_local_currency <- index_prices_local_currency[, !(colnames(index_prices_local_currency) %in% c("MXCHMC Index", "MXEUMC Index", "MXUSMC Index", "MXEFMC Index", "MXWOMC Index", 
+                                                                                                            "MXUSLC Index", "MXEULC Index", "MXEFLC Index", "MXCHLC Index", "MXWOLC Index", 
+                                                                                                            "TENHGU Index", 
+                                                                                                            "I08240 Index", "I08240EU Index"))]
 
-#### CPU optimisation ####
-plan(multisession)  # use available cores for parallel processing
-handlers(global = TRUE)
-# options(future.globals.maxSize = 1024 * 1024 * 1024) # Crashes R, don't uncomment!
+# Determine currency pairs that do not contain sufficiently long dated price data and are not essential to the investment universe
+CHF_FX_NA_dates <- determine_start_dates(CHF_FX)
+print(CHF_FX_NA_dates)
 
-generate_weighted_cols_parallel <- function(data, max_comb_size) {
-  
-  # Get the number of columns in the dataframe
-  num_cols <- ncol(data)
-  
-  # Iterate over i for i-combinations
-  for (i in 2:min(num_cols, max_comb_size)) {
-    
-    # Generate all i-combinations of column indices
-    combos <- combinat::combn(1:num_cols, i, simplify = FALSE)
-    
-    # Create progress bar
-    p <- progressor(along = combos)
-    
-    # Calculate the new column and column name in parallel
-    new_cols <- future_lapply(combos, function(combo) {
-      # Calculate the new column as the row-wise mean of the selected columns
-      new_col <- rowMeans(data[, combo])
-      
-      # Create the new column name
-      new_col_name <- paste(names(data)[combo], collapse = " ")
-      
-      p()  # update progress bar
-      
-      return(list(name = new_col_name, column = new_col))
-    })
-    
-    # Add new columns to the data frame
-    for (new_col in new_cols) {
-      data[[new_col$name]] <- new_col$column
-    }
-  }
-  
-  return(data)
+# Remove currency pairs (columns) that do not contain sufficiently long dated price data and are not essential to the investment universe
+# NOT APPLICABLE
+
+# Provide better names to remaining columns of dataframes index_prices_local_currency and CHF_FX
+index_prices_local_currency <- rename_columns(index_prices_local_currency)
+CHF_FX <- rename_columns(CHF_FX)
+
+# Transform non-NA values from character to numeric
+index_prices_local_currency <- index_prices_local_currency %>%
+  mutate_at(
+    vars(-Dates),
+    ~as.numeric(na_if(., ""))  # Convert non-empty strings to numeric
+  )
+CHF_FX <- CHF_FX %>%
+  mutate_at(
+    vars(-Dates),
+    ~as.numeric(na_if(., ""))  # Convert non-empty strings to numeric
+  )
+
+# For each geography, combine the three intermediate-term treasuries (3-5Y, 5-7Y, 7-10Y) into one investable security that is weighted 1/3 in each
+index_prices_local_currency <- index_prices_local_currency %>%
+  mutate(`US IT treasuries (3-5Y, 5-7Y, 7-10Y)` = (`US IT treasuries 3-5Y` + `US IT treasuries 5-7Y` + `US IT treasuries 7-10Y`) / 3,
+         `Europe IT treasuries (3-5Y, 5-7Y, 7-10Y)` = (`Europe IT treasuries 3-5Y` + `Europe IT treasuries 5-7Y` + `Europe IT treasuries 7-10Y`) / 3,
+         `EM IT treasuries (3-5Y, 5-7Y, 7-10Y)` = (`EM IT treasuries 3-5Y` + `EM IT treasuries 5-7Y` + `EM IT treasuries 7-10Y`) / 3,
+         `Switzerland IT treasuries (3-5Y, 5-7Y, 7-10Y)` = (`Switzerland IT treasuries 3-5Y` + `Switzerland IT treasuries 5-7Y` + `Switzerland IT treasuries 7-10Y`) / 3,
+         `World IT treasuries (3-5Y, 5-7Y, 7-10Y)` = (`World IT treasuries 3-5Y` + `World IT treasuries 5-7Y` + `World IT treasuries 7-10Y`) / 3)
+
+# Remove the original intermediate-term treasuries columns
+index_prices_local_currency <- index_prices_local_currency %>%
+  select(-ends_with("3-5Y"), -ends_with("5-7Y"), -ends_with("7-10Y"))
+
+# Rearrange the indices (columns) to a more logical order
+index_prices_local_currency <- rearrange_columns(index_prices_local_currency)
+
+# Remove longer dated observations until each column contains values for each remaining date (row)
+# i.e. Filter the data frames to include only rows starting from the latest start date
+index_prices_local_currency <- filter(index_prices_local_currency, 
+                                      Dates > max(determine_start_dates(index_prices_local_currency)))
+CHF_FX <- filter(CHF_FX,
+                 Dates >= max(determine_start_dates(index_prices_local_currency)))
+CHF_rf_rates <- filter(CHF_rf_rates,
+                       Dates >= max(determine_start_dates(index_prices_local_currency)))
+
+# To prepare for upcoming analysis: sort data frames from oldest observations (at the top) to most recent observations (at the bottom)
+index_prices_local_currency <- index_prices_local_currency %>% 
+  arrange(Dates)
+CHF_FX <- CHF_FX %>% 
+  arrange(Dates)
+swiss_inflation <- swiss_inflation %>% 
+  arrange(Dates)
+CHF_rf_rates <- CHF_rf_rates %>% 
+  arrange(Dates)
+
+# Generate dataframe containing index prices in CHF (calculated from index_prices_local_currency and CHF_FX)
+# Initialize dataframe that will contain index prices in CHF
+index_prices_CHF <- index_prices_local_currency
+# Select the columns representing USD, EUR, and CHF denominated indexes
+usd_indexes <- c("US", "US small cap", "Europe small cap", "EM", "EM small cap", "Switzerland small cap", "World", "World small cap", "US ST treasuries 1-3Y", "US IT treasuries (3-5Y, 5-7Y, 7-10Y)", "US LT treasuries 10Y+", "EM ST treasuries 1-3Y", "EM IT treasuries (3-5Y, 5-7Y, 7-10Y)", "EM LT treasuries 10Y+", "World ST treasuries 1-3Y", "World IT treasuries (3-5Y, 5-7Y, 7-10Y)", "World LT treasuries 10Y+", "Gold bullion")
+eur_indexes <- c("Europe", "Europe ST treasuries 1-3Y", "Europe IT treasuries (3-5Y, 5-7Y, 7-10Y)", "Europe LT treasuries 10Y+")
+chf_indexes <- c("Switzerland", "Switzerland ST treasuries 1-3Y", "Switzerland IT treasuries (3-5Y, 5-7Y, 7-10Y)", "Switzerland LT treasuries 10Y+")
+# Multiply USD denominated columns by CHF/USD exchange rate
+index_prices_CHF[, usd_indexes] <- index_prices_CHF[, usd_indexes] * CHF_FX[["CHF per USD"]]
+# Multiply EUR denominated columns by CHF/EUR exchange rate
+index_prices_CHF[, eur_indexes] <- index_prices_CHF[, eur_indexes] * CHF_FX[["CHF per EUR"]]
+
+# Inspect dataframe index_prices_CHF
+print(index_prices_CHF)
+colnames(index_prices_CHF)
+head(index_prices_CHF, 10)
+tail(index_prices_CHF, 10)
+
+# Generate dataframe containing daily price returns in CHF (calculated from index_prices_CHF)
+# Initialize dataframe that will contain daily price returns in CHF
+index_daily_returns_CHF <- data.frame(index_prices_CHF$Dates)
+names(index_daily_returns_CHF)[1] <- "Dates"
+# Calculate daily price returns for each index in CHF
+num_rows <- nrow(index_prices_CHF)
+for (col in colnames(index_prices_CHF)[-1]) {
+  prices <- index_prices_CHF[[col]]
+  returns <- (prices[2:num_rows] / prices[1:(num_rows - 1)]) - 1
+  index_daily_returns_CHF[[col]] <- c(NA, returns)
 }
 
+index_daily_returns_CHF <- na.omit(index_daily_returns_CHF) # This removes the first row, which only contains returns of value NA
 
-start_time <- Sys.time()
-data <- generate_weighted_cols_parallel(data, 3)
-end_time <- Sys.time()
-execution_time <- end_time - start_time
-print(execution_time)
-
-# Check the size of the object
-print(object.size(data), units = "MB")
-
-#### SQLite ####
-sanitize_column_name <- function(name) {
-  # Remove or replace special characters
-  name <- gsub("`", "", name)
-  name <- gsub(" ", "_", name)
-  
-  # If the name starts with a digit, prepend "X"
-  if (grepl("^[0-9]", name)) {
-    name <- paste("X", name, sep = "")
-  }
-  
-  return(name)
-}
-
-generate_weighted_cols_sqlite <- function(data, max_comb_size) {
-  # Create a temporary SQLite database
-  con <- dbConnect(RSQLite::SQLite(), ":memory:")
-  
-  # Change the column names if they are numeric
-  names(data) <- ifelse(grepl("^[0-9]", names(data)), paste("X", names(data), sep = ""), names(data))
-  
-  # Copy the data frame to the database
-  dbWriteTable(con, "data", data)
-  
-  # Get the column names
-  cols <- colnames(data)
-  
-  # Iterate over i for i-combinations
-  for (i in 2:min(length(cols), max_comb_size)) {
-    # Generate all i-combinations of column names
-    combos <- combinat::combn(cols, i, simplify = FALSE)
-    
-    # Iterate over each combination
-    for (combo in combos) {
-      # Create the new column name ensuring it doesn't start with a digit
-      new_col_name <- paste("X", paste(combo, collapse = "_"), sep = "")
-      
-      # Calculate the new column as the mean of the selected columns
-      sql <- paste0('ALTER TABLE data ADD COLUMN "', new_col_name, '" REAL;')
-      dbExecute(con, sql)
-      sql <- paste0('UPDATE data SET "', new_col_name, '" = (', paste('COALESCE("', combo, '", 0)', sep = "", collapse = " + "), ")/", length(combo), ";")
-      dbExecute(con, sql)
-    }
-  }
-  
-  # Read the updated data back into R
-  data <- dbReadTable(con, "data")
-  
-  # Disconnect from the database
-  dbDisconnect(con)
-  
-  return(data)
-}
-
-# Add a prefix to numeric column names
-names(data) <- ifelse(grepl("^[0-9]", names(data)), paste("X", names(data), sep = ""), names(data))
-
-start_time <- Sys.time()
-data <- generate_weighted_cols_sqlite(data, 2)
-end_time <- Sys.time()
-execution_time <- end_time - start_time
-print(execution_time)
-
-# Check the size of the object
-print(object.size(data), units = "MB")
+# Inspect the size of the cleaned data that we continue from
+print(paste("index_daily_returns_CHF:", round(object.size(index_daily_returns_CHF) / 1048576, 2), "MB"))
+print(paste("CHF_FX:", round(object.size(CHF_FX) / 1048576, 2), "MB"))
+print(paste("CHF_rf_rates:", round(object.size(CHF_rf_rates) / 1048576, 2), "MB"))
+print(paste("swiss_inflation:", round(object.size(swiss_inflation) / 1048576, 2), "MB"))
 
 
-#### Algo ####
-# Define function
-calculate_returns <- function(data, years, threshold) {
-  
-  # Calculate number of rows (days) per year
-  days_per_year <- 252  # typically there are 252 trading days in a year
-  
-  # Convert years to trading days
-  period <- years * days_per_year
-  
-  # Initialize output data frame
-  output <- data.frame(Column = character(),
-                       Worst_Period_End_Value = numeric(),
-                       stringsAsFactors = FALSE)
-  
-  # Iterate over each column
-  for (col in names(data)) {
-    
-    if (col == "Date") next  # skip Date column
-    
-    # Initialize worst period end value as infinity
-    worst_period_end_value <- Inf
-    
-    # Initialize flag indicating whether column dropped below threshold
-    below_threshold <- FALSE
-    
-    # Iterate over each day
-    for (i in 1:(nrow(data) - period + 1)) {
-      
-      # Calculate product of returns for the period
-      period_return <- prod(1 + data[i:(i + period - 1), col]) * 100
-      
-      # Check if period return dropped below threshold
-      if (period_return < threshold) {
-        below_threshold <- TRUE
-        break
-      }
-      
-      # Update worst period end value
-      worst_period_end_value <- min(worst_period_end_value, period_return)
-      
-    }
-    
-    # If column never dropped below threshold, add to output
-    if (!below_threshold) {
-      output <- rbind(output, data.frame(Column = col,
-                                         Worst_Period_End_Value = worst_period_end_value,
-                                         stringsAsFactors = FALSE))
-    }
-    
-  }
-  
-  # Return output
-  return(output)
-  
-}
+####
+####
+####
+####
+####
 
-# Use function
-# Replace "10" and "100" with your desired years and threshold
-start_time <- Sys.time()
-result <- calculate_returns(data, 10, 85)
-end_time <- Sys.time()
-execution_time <- end_time - start_time
-print(execution_time)
+#### DATA PREPARATION ####
+
+# Feature engineering a large set of investment strategies (as separate columns). Strategies differ in: 
+# (a) their strategic asset allocation, i.e. different (equally-weighted) combinations of the 26 index return series.
+# (b) their rebalancing technique: periodic (e.g., daily/monthly/quarterly-semi-annually/annually) or threshold-based (e.g., 10%/20%/25% deviation from original weight)
+# Notice that, as we increase the number of combinations that we implement, the number of additional columns increases exponentially.
+
+# Generate new columns (different investment strategies of equally-weighted indices) from our daily index returns in CHF
+strategies_max_2_comb_daily_rebal <- generate_weighted_cols_daily_rebal(index_daily_returns_CHF, 2)
+strategies_max_3_comb_daily_rebal <- generate_weighted_cols_daily_rebal(index_daily_returns_CHF, 3)
+strategies_max_4_comb_daily_rebal <- generate_weighted_cols_daily_rebal(index_daily_returns_CHF, 4)
+# strategies_max_5_comb_daily_rebal <- generate_weighted_cols_daily_rebal(index_daily_returns_CHF, 5)
 
 
-# Print result
-print(result)
+# ------------------------------------------------------------------------------------------------ #
+
+#### (PRIORITY 2) TO RUN THE FOLLOWING LINES OF CODE: figure out (TO DO): ####
+# --> LUCA: a flexible "generate_weighted_cols" function (for different possible periodic rebalancing techniques), that is also computationally efficient
+# --> LUCA: a more computationally efficient "generate_weighted_cols_daily_rebal" and (flexible) "generate_weighted_cols" function;
+# --> MARCO/ARIQ(2) big data methods (parallel processing / cloud services) for extra computational efficiency (storage + processing) 
+
+# strategies_max_5_comb_daily_rebal <- generate_weighted_cols_daily_rebal(index_daily_returns_CHF, 5)
+# strategies_max_6_comb_daily_rebal <- generate_weighted_cols_daily_rebal(index_daily_returns_CHF, 6)
+
+# ------------------------------------------------------------------------------------------------ #
 
 
-#### Algo parallel processing ####
+# Inspect (a subset of) the generated dataframes
+head(strategies_max_2_comb_daily_rebal[, 1:30], 5)
+head(strategies_max_3_comb_daily_rebal[, 1:30], 5)
+head(strategies_max_4_comb_daily_rebal[, 1:30], 5)
+tail(strategies_max_2_comb_daily_rebal[, (ncol(strategies_max_2_comb_daily_rebal)-4):ncol(strategies_max_2_comb_daily_rebal)], 5)
+tail(strategies_max_3_comb_daily_rebal[, (ncol(strategies_max_3_comb_daily_rebal)-4):ncol(strategies_max_3_comb_daily_rebal)], 5)
+tail(strategies_max_4_comb_daily_rebal[, (ncol(strategies_max_4_comb_daily_rebal)-4):ncol(strategies_max_4_comb_daily_rebal)], 5)
+
+# Inspect the size of the generated data that contains the different investment strategies
+print(paste("strategies_max_2_comb_daily_rebal (generated):", round(object.size(strategies_max_2_comb_daily_rebal) / 1048576, 2), "MB"))
+print(paste("strategies_max_3_comb_daily_rebal (generated):", round(object.size(strategies_max_3_comb_daily_rebal) / 1048576, 2), "MB"))
+print(paste("strategies_max_4_comb_daily_rebal (generated):", round(object.size(strategies_max_4_comb_daily_rebal) / 1048576, 2), "MB"))
+
+
+####
+####
+####
+####
+####
+
+#### DATA ANALYSIS AND VISUALIZATION ####
+
+# (PART 1) A small initial analysis: visualizing correlations between daily returns of the different indices. 
+
+# Plot the correlation matrix between returns of the initial 26 indices
+plot_correlation_matrix(index_daily_returns_CHF)
+
+
+# (PART 2) A larger, still simple analysis: calculating and visualizing mean returns and standard deviations for each of the candidate investment strategies. 
+
+# Plot the mean-variance graph for daily returns of each investment strategy in the data frame (first column is "Dates")
+# First for only the 26 initial variables, than for all combinations up to 2, than for all higher number of combinations.
+plot_mean_variance_graph(index_daily_returns_CHF)
+plot_mean_variance_graph(strategies_max_2_comb_daily_rebal)
+plot_mean_variance_graph(strategies_max_3_comb_daily_rebal)
+plot_mean_variance_graph(strategies_max_4_comb_daily_rebal)
+
+# Notice how the linear regressions nicely show how, on average, diversification is granting you more bang (return) for your buck (risk)
+
+
+# ------------------------------------------------------------------------------------------------------#
+
+#### SAVE CURRENT WORKSPACE / LOAD CURRENT WORKSPACE ####
+
+# Save all objects in the workspace to a file named 'my_workspace.RData'
+save.image('my_workspace.RData')
+# Load the objects from 'my_workspace.RData' into the workspace
+# It's a good practice to start a new session or clear the workspace before loading the saved objects.
+load('my_workspace.RData')
+# Load functions file
+source("BDA_BDBD_functions - Combined.R")
+
+# ------------------------------------------------------------------------------------------------------#
+
+
+# (PART 3) The most challenging analysis:
+# (PART 3A) determining the unique optimal strategy that corresponds exactly to a given user-specified set of investment parameters 
+
+# Determine for a specified time horizon and a specified minimum acceptable percentage value (minimum threshold):
+# [1] for each investment strategy, the lowest cumulative return out of all historic time periods that corresponds to the specified time horizon; 
+# [2] which investment strategies should be refused because their value dropped below the minimum threshold at any point over any historic time period that corresponds to the specified time horizon (group 2 strategies)
+# [3] a plot that displays (i) the intermediate evolution of the lowest cumulative return series for each investment strategy (different colors for non-refused "group 1 strategies", and refused "group 2 strategies"), for each separate time period's first day until its final day, and (ii) a horizontal dashed line that shows the minimum threshold
+
+# Call function determine_optimal_strategy
+# Note: function "determine_optimal_strategy" returns 4 objects: list(df_above_threshold, df_excluded, plot_list_different_periods_within_strategies, plot_lowest_cum_returns
+# ----- COMPUTATIONALLY INEFFICIENT -----
+your_candidate_strategies_results <- determine_optimal_strategy(df_return_series = index_daily_returns_CHF, 
+                                                                time_horizon_years = 10, 
+                                                                minimum_allowable_percentage = 0.75)
+
+# Extract separate results from that is contained in your_candidate_strategies_results (results from function determine_optimal_strategy)
+your_strategies_above_threshold <- your_candidate_strategies_results[[1]]
+your_strategies_below_threshold <- your_candidate_strategies_results[[2]]
+your_plots_for_each_strategy <- your_candidate_strategies_results[[3]]
+your_plot_lowest_returns_for_each_strategy <- your_candidate_strategies_results[[4]]
+
+# your_strategies_above_threshold
+# Print strategies that stayed above the threshold
+print(paste("Strategies that stayed above the threshold:", nrow(your_strategies_above_threshold)))
+print(your_strategies_above_threshold)
+
+# your_strategies_below_threshold
+# Print strategies that are refused for having decreased below the threshold
+print(paste("Refused strategies (decreased below the threshold):", nrow(your_strategies_below_threshold)))
+print(your_strategies_below_threshold)
+
+# your_plots_for_each_strategy
+# (1) To access a specific plot from the plot list your_plots_for_each_strategy, you would index it using the strategy name as follows:
+# In the place of "Strategy Name", use the exact name of the strategy you're interested in, like "US", "Europe", "World", etc.
+specific_plot = your_plots_for_each_strategy[["Gold bullion"]]
+print(specific_plot)
+
+# (2) If you would like to display multiple plots together, you can use the gridExtra package. 
+# You need to specify the plots you want to display as follows:
+grid.arrange(
+  your_plots_for_each_strategy[["Europe"]],
+  your_plots_for_each_strategy[["Gold bullion"]],
+  ncol = 1  # Or any other number of columns you want
+)
+# Notice that, for a given investment strategy, the algorithm analyzes all relevant time periods. 
+# We display only a subset of this, for illustration purposes.
+
+# your_plot_lowest_returns_for_each_strategy
+# Plot the intermediate evolution of the lowest cumulative return series for each investment strategy (different colors for non-refused "group 1 strategies", and refused "group 2 strategies")
+print(your_plot_lowest_returns_for_each_strategy)
+
+
+# ------------------------------------------------------------------------------------------------ #
+
+#### (PRIORITY 1) TO RUN THE FOLLOWING LINES OF CODE: figure out (TO DO): ####
+# --> LUCA: a more computationally efficient "determine_optimal_strategy" function; 
+# --> MARCO/ARIQ(2) big data methods (parallel processing / cloud services) for extra computational efficiency (storage + processing) --> 
+
+# your_candidate_strategies_results_2 <- determine_optimal_strategy(df_return_series = strategies_max_2_comb_daily_rebal, 
+#                                                                   time_horizon_years = 5, 
+#                                                                   minimum_allowable_percentage = 0.75)
+# your_candidate_strategies_results_3 <- determine_optimal_strategy(df_return_series = strategies_max_3_comb_daily_rebal, 
+#                                                                   time_horizon_years = 10, 
+#                                                                   minimum_allowable_percentage = 0.75)
+# your_candidate_strategies_results_4 <- determine_optimal_strategy(df_return_series = strategies_max_4_comb_daily_rebal, 
+#                                                                   time_horizon_years = 10, 
+#                                                                   minimum_allowable_percentage = 0.75)
+# your_candidate_strategies_results_5 <- determine_optimal_strategy(df_return_series = strategies_max_5_comb_daily_rebal, 
+#                                                                   time_horizon_years = 10, 
+#                                                                   minimum_allowable_percentage = 0.75)
+
+# ------------------------------------------------------------------------------------------------ #
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#### STILL MARCOS CODE FOR THE PRESENTATION
+
+### Algo parallel processing ###
 
 calculate_returns_single_column <- function(col_name, data, period, threshold) {
   # Skip Date column
@@ -334,12 +527,7 @@ print(execution_time)
 # Print result
 print(result)
 
-
-
-
-
-
-#### Algo test ####
+### Algo test ###
 # Define function
 calculate_returns <- function(data, years, threshold) {
   
@@ -429,79 +617,252 @@ for (i in 1:nrow(result)) {
 }
 
 
-#### Data visualization ####
-# Plot the correlation matrix of all the returns
-correlation_matrix <- cor(data)
-print(correlation_matrix)
 
-# Melt the correlation matrix to long format for ggplot2
-melted_cormat <- melt(correlation_matrix)
 
-# Plot the correlation matrix
-ggplot(data = melted_cormat, aes(x=Var1, y=Var2, fill=value)) + 
-  geom_tile() +
-  scale_fill_gradient2(low = "blue", high = "red", mid = "white", 
-                       midpoint = 0, limit = c(-1,1), space = "Lab", 
-                       name="Pearson\nCorrelation") +
-  theme_minimal() + 
-  theme(axis.text.x = element_text(angle = 45, vjust = 1, 
-                                   size = 10, hjust = 1), 
-        axis.title = element_blank()) +
-  coord_fixed(ratio = 1/1.5)
+
+
+# (PART 3B) evaluating the out-of-sample performance of such strategies.
+# ..................
+# ..................
+# ..................
+# ..................
+# ..................
+# ..................
+# ..................
+# ..................
+# ..................
+# ..................
+# ..................
 
 
 
 
 
 
+####
+####
+####
+####
+####
 
-# PLot the mean-variance graph for the variables
-means <- colMeans(data)
-daily_sd <- apply(data, 2, sd)
-
-# Annualizing means
-annual_means <- (1 + means)^252 - 1
-# Annualize the standard deviation
-annual_sd <- daily_sd * sqrt(252)
-
-plot_df <- data.frame(means=annual_means, sds=annual_sd)
-
-# Add a new column for color
-plot_df$group <- NA
-# Assign group labels based on column number
-plot_df$group[1:26] <- 'Original strategies'
-plot_df$group[27:351] <- '2 combinations'
-plot_df$group[352:2951] <- '3 combinations'
-plot_df$group[2952:17901] <- '4 combinations'
-plot_df$group[17902:83681] <- '5 combinations'
-
-
-# Plot with color aesthetic mapped to group
-ggplot(plot_df, aes(x=annual_means, y = annual_sd, color=group))+
-  geom_point()+
-  labs(x='Mean', y="Standard deviation", title="Annualised mean and standard deviation of all the investment strategies")+
-  scale_x_continuous(labels = scales::percent)+
-  scale_y_continuous(labels = scales::percent)+
-  scale_color_manual(values=c('Original strategies' = '#000000', '2 combinations' = '#FF0000', 
-                              '3 combinations' = '#00FF00', '4 combinations' = '#0000FF', 
-                              '5 combinations' = '#FFA500'))+
-  theme_bw()+
-  theme(plot.title = element_text(size= 14, hjust = 0.5, face ="bold"), 
-        axis.text.x = element_text(angle = 90, hjust = 1, face = "bold"),
-        axis.text.y = element_text(angle = 90, hjust = 1, face = "bold"))
+# RESULTS
 
 
 
-# 26 strategies only
-ggplot(plot_df, aes(x=means_percent, y = var_percent))+
-  geom_point()+
-  labs(x='Mean', y="Variance", title="Mean and variance of all the investment strategies")+
-  scale_x_continuous(labels = percent)+
-  scale_y_continuous(labels = percent)+
-  theme_bw()+
-  theme(plot.title = element_text(size= 14, hjust = 0.5, face ="bold"), 
-        axis.text.x = element_text(angle = 90, hjust = 1, face = "bold"),
-        axis.text.y = element_text(angle = 90, hjust = 1, face = "bold"))
+
+
+
+
+
+
+
+# The description currently includes a placeholder for the specific machine learning algorithms and statistical methods used. 
+# Including details about which specific algorithms and methods were chosen, and the reasoning behind these choices, 
+# would provide a clearer picture of your approach and allow others to better understand your analysis. 
+# Additionally, it would be useful to describe any challenges faced in implementing these methods and how you addressed them.
+
+
+
+####
+####
+####
+####
+####
+
+# SCALING AND CLOUD DEPLOYMENT
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+####
+####
+####
+####
+####
+
+# MARCO'S WORK FOR THE PRESENTATION THAT IS STILL UNUSED ABOVE............
+
+
+
+
+
+
+### CPU optimisation ###
+plan(multisession)  # use available cores for parallel processing
+handlers(global = TRUE)
+# options(future.globals.maxSize = 1024 * 1024 * 1024) # Crashes R, don't uncomment!
+
+generate_weighted_cols_parallel <- function(data, max_comb_size) {
+  
+  # Get the number of columns in the dataframe
+  num_cols <- ncol(data)
+  
+  # Iterate over i for i-combinations
+  for (i in 2:min(num_cols, max_comb_size)) {
+    
+    # Generate all i-combinations of column indices
+    combos <- combinat::combn(1:num_cols, i, simplify = FALSE)
+    
+    # Create progress bar
+    p <- progressor(along = combos)
+    
+    # Calculate the new column and column name in parallel
+    new_cols <- future_lapply(combos, function(combo) {
+      # Calculate the new column as the row-wise mean of the selected columns
+      new_col <- rowMeans(data[, combo])
+      
+      # Create the new column name
+      new_col_name <- paste(names(data)[combo], collapse = " ")
+      
+      p()  # update progress bar
+      
+      return(list(name = new_col_name, column = new_col))
+    })
+    
+    # Add new columns to the data frame
+    for (new_col in new_cols) {
+      data[[new_col$name]] <- new_col$column
+    }
+  }
+  
+  return(data)
+}
+
+
+start_time <- Sys.time()
+data <- generate_weighted_cols_parallel(data, 3)
+end_time <- Sys.time()
+execution_time <- end_time - start_time
+print(execution_time)
+
+# Check the size of the object
+print(object.size(data), units = "MB")
+
+### SQLite ###
+sanitize_column_name <- function(name) {
+  # Remove or replace special characters
+  name <- gsub("`", "", name)
+  name <- gsub(" ", "_", name)
+  
+  # If the name starts with a digit, prepend "X"
+  if (grepl("^[0-9]", name)) {
+    name <- paste("X", name, sep = "")
+  }
+  
+  return(name)
+}
+
+generate_weighted_cols_sqlite <- function(data, max_comb_size) {
+  # Create a temporary SQLite database
+  con <- dbConnect(RSQLite::SQLite(), ":memory:")
+  
+  # Change the column names if they are numeric
+  names(data) <- ifelse(grepl("^[0-9]", names(data)), paste("X", names(data), sep = ""), names(data))
+  
+  # Copy the data frame to the database
+  dbWriteTable(con, "data", data)
+  
+  # Get the column names
+  cols <- colnames(data)
+  
+  # Iterate over i for i-combinations
+  for (i in 2:min(length(cols), max_comb_size)) {
+    # Generate all i-combinations of column names
+    combos <- combinat::combn(cols, i, simplify = FALSE)
+    
+    # Iterate over each combination
+    for (combo in combos) {
+      # Create the new column name ensuring it doesn't start with a digit
+      new_col_name <- paste("X", paste(combo, collapse = "_"), sep = "")
+      
+      # Calculate the new column as the mean of the selected columns
+      sql <- paste0('ALTER TABLE data ADD COLUMN "', new_col_name, '" REAL;')
+      dbExecute(con, sql)
+      sql <- paste0('UPDATE data SET "', new_col_name, '" = (', paste('COALESCE("', combo, '", 0)', sep = "", collapse = " + "), ")/", length(combo), ";")
+      dbExecute(con, sql)
+    }
+  }
+  
+  # Read the updated data back into R
+  data <- dbReadTable(con, "data")
+  
+  # Disconnect from the database
+  dbDisconnect(con)
+  
+  return(data)
+}
+
+# Add a prefix to numeric column names
+names(data) <- ifelse(grepl("^[0-9]", names(data)), paste("X", names(data), sep = ""), names(data))
+
+start_time <- Sys.time()
+data <- generate_weighted_cols_sqlite(data, 2)
+end_time <- Sys.time()
+execution_time <- end_time - start_time
+print(execution_time)
+
+# Check the size of the object
+print(object.size(data), units = "MB")
+
+
+
+
+
 
 
 # Plot the runtime differences
@@ -540,3 +901,4 @@ file_size2 <- c(14, 115, 694, 3245, 12171, 37675, 98248, 219394, 425342)
 
 # Create the dataframe
 size_df <- data.frame(Combinations = combinations2, Columns = columns2, File_Size_MB = file_size2)
+

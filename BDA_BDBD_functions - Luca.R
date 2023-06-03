@@ -131,7 +131,7 @@ rearrange_columns <- function(dataframe) {
 }
 
 # Define a function that generates columns of equally-weighted indices, with daily rebalancing
-generate_weighted_cols <- function(index_returns, max_comb_size) {
+generate_weighted_cols_daily_rebal <- function(index_returns, max_comb_size) {
   # Start timer to later display how long the function took to run
   start_time <- Sys.time()
   
@@ -379,8 +379,6 @@ determine_optimal_strategy <- function(df_return_series, time_horizon_years, min
       lowest_series[[col]] <- lowest_cumulative_series
     }
   }
-  
-  
   
   # Generate a plot that displays the intermediate evolution of the lowest cumulative return series for each investment strategy (different colors for non-refused "group 1 strategies", and refused "group 2 strategies")
   # Preprocess data for plotting
