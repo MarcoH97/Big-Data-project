@@ -15,6 +15,8 @@ library(DBI)
 library(ggplot2)
 library(reshape2)
 library(scales)
+library(zoo)
+library(gridExtra)
 
 
 ##############################################################################
@@ -84,7 +86,7 @@ print(paste("swiss_inflation:", round(object.size(swiss_inflation) / 1048576, 2)
 
 # DATA CLEANING AND DATA INTEGRATION
 
-# Inspect classes of the  Dates columns of the different data frames 
+# Inspect classes of the Dates columns of the different data frames 
 class(index_prices_local_currency$Dates)
 class(CHF_FX$Dates)
 class(swiss_inflation$Dates)
@@ -179,6 +181,16 @@ CHF_FX <- filter(CHF_FX,
 CHF_rf_rates <- filter(CHF_rf_rates,
                        Dates >= max(determine_start_dates(index_prices_local_currency)))
 
+# To prepare for upcoming analysis: sort data frames from oldest observations (at the top) to most recent observations (at the bottom)
+index_prices_local_currency <- index_prices_local_currency %>% 
+  arrange(Dates)
+CHF_FX <- CHF_FX %>% 
+  arrange(Dates)
+swiss_inflation <- swiss_inflation %>% 
+  arrange(Dates)
+CHF_rf_rates <- CHF_rf_rates %>% 
+  arrange(Dates)
+
 # Generate dataframe containing index prices in CHF (calculated from index_prices_local_currency and CHF_FX)
 # Initialize dataframe that will contain index prices in CHF
 index_prices_CHF <- index_prices_local_currency
@@ -205,11 +217,11 @@ names(index_daily_returns_CHF)[1] <- "Dates"
 num_rows <- nrow(index_prices_CHF)
 for (col in colnames(index_prices_CHF)[-1]) {
   prices <- index_prices_CHF[[col]]
-  returns <- (prices[1:(num_rows - 1)] / prices[2:num_rows]) - 1
-  index_daily_returns_CHF[[col]] <- c(returns, NA)
+  returns <- (prices[2:num_rows] / prices[1:(num_rows - 1)]) - 1
+  index_daily_returns_CHF[[col]] <- c(NA, returns)
 }
 
-index_daily_returns_CHF <- na.omit(index_daily_returns_CHF) # This removes the final row, which only contains returns of value NA
+index_daily_returns_CHF <- na.omit(index_daily_returns_CHF) # This removes the first row, which only contains returns of value NA
 
 # Inspect the size of the cleaned data that we continue from
 print(paste("index_daily_returns_CHF:", round(object.size(index_daily_returns_CHF) / 1048576, 2), "MB"))
@@ -286,80 +298,108 @@ plot_mean_variance_graph(strategies_max_2_comb_daily_rebal)
 plot_mean_variance_graph(strategies_max_3_comb_daily_rebal)
 plot_mean_variance_graph(strategies_max_4_comb_daily_rebal)
 
+# Notice how the linear regressions nicely show how, on average, diversification is granting you more bang (return) for your buck (risk)
+
+
+# ------------------------------------------------------------------------------------------------------#
+
+# Save all objects in the workspace to a file named 'my_workspace.RData'
+# save.image('my_workspace.RData')
+# Load the objects from 'my_workspace.RData' into the workspace
+# It's a good practice to start a new session or clear the workspace before loading the saved objects.
+load('my_workspace.RData')
+# Load functions file
+source("BDA_BDBD_functions - Luca.R")
+
+# ------------------------------------------------------------------------------------------------------#
 
 # (3) The most challenging analysis:
 # (3a) determining the unique optimal strategy that corresponds exactly to a given user-specified set of investment parameters 
-# (3b) evaluating the out-of-sample performance of such strategies.
-# -------------- (based on Marco's code) --------------
-
-#### Algo ####
-# Define function
-calculate_returns <- function(data, years, threshold) {
-  
-  # Calculate number of rows (days) per year
-  days_per_year <- 252  # typically there are 252 trading days in a year
-  
-  # Convert years to trading days
-  period <- years * days_per_year
-  
-  # Initialize output data frame
-  output <- data.frame(Column = character(),
-                       Worst_Period_End_Value = numeric(),
-                       stringsAsFactors = FALSE)
-  
-  # Iterate over each column
-  for (col in names(data)) {
-    
-    if (col == "Date") next  # skip Date column
-    
-    # Initialize worst period end value as infinity
-    worst_period_end_value <- Inf
-    
-    # Initialize flag indicating whether column dropped below threshold
-    below_threshold <- FALSE
-    
-    # Iterate over each day
-    for (i in 1:(nrow(data) - period + 1)) {
-      
-      # Calculate product of returns for the period
-      period_return <- prod(1 + data[i:(i + period - 1), col]) * 100
-      
-      # Check if period return dropped below threshold
-      if (period_return < threshold) {
-        below_threshold <- TRUE
-        break
-      }
-      
-      # Update worst period end value
-      worst_period_end_value <- min(worst_period_end_value, period_return)
-      
-    }
-    
-    # If column never dropped below threshold, add to output
-    if (!below_threshold) {
-      output <- rbind(output, data.frame(Column = col,
-                                         Worst_Period_End_Value = worst_period_end_value,
-                                         stringsAsFactors = FALSE))
-    }
-    
-  }
-  
-  # Return output
-  return(output)
-  
-}
-
-# Use function
-# Replace "10" and "100" with your desired years and threshold
-start_time <- Sys.time()
-result <- calculate_returns(data, 10, 85)
-end_time <- Sys.time()
-execution_time <- end_time - start_time
-print(execution_time)
 
 
-# Print result
-print(result)
+# Determine for a specified time horizon and a specified minimum acceptable percentage value (minimum threshold):
+# [1] for each investment strategy, the lowest cumulative return out of all historic time periods that corresponds to the specified time horizon; 
+# [2] which investment strategies should be refused because their value dropped below the minimum threshold at any point over any historic time period that corresponds to the specified time horizon (group 2 strategies)
+# [3] a plot that displays (i) the intermediate evolution of the lowest cumulative return series for each investment strategy (different colors for non-refused "group 1 strategies", and refused "group 2 strategies"), for each separate time period's first day until its final day, and (ii) a horizontal dashed line that shows the minimum threshold
+
+# Set input parameters for function determine_optimal_strategy
+your_df_return_series = index_daily_returns_CHF
+your_time_horizon_years = 10
+your_minimum_allowable_percentage = 0.75
+
+# Call function determine_optimal_strategy
+# Note: function "determine_optimal_strategy" returns 4 objects: list(df_above_threshold, df_excluded, plot_list_different_periods_within_strategies, plot_lowest_cum_returns
+# ----- COMPUTATIONALLY HEAVY -----
+your_candidate_strategies_results <- determine_optimal_strategy(your_df_return_series, your_time_horizon_years, your_minimum_allowable_percentage)
+
+# Extract separate results from that is contained in your_candidate_strategies_results (results from function determine_optimal_strategy)
+your_strategies_above_threshold <- your_candidate_strategies_results[[1]]
+your_strategies_below_threshold <- your_candidate_strategies_results[[2]]
+your_plots_for_each_strategy <- your_candidate_strategies_results[[3]]
+your_plot_lowest_returns_for_each_strategy <- your_candidate_strategies_results[[4]]
+
+# your_strategies_above_threshold
+# Print strategies that stayed above the threshold
+print(paste("Strategies that stayed above the threshold:", nrow(your_strategies_above_threshold)))
+print(your_strategies_above_threshold)
+
+# your_strategies_below_threshold
+# Print strategies that are refused for having decreased below the threshold
+print(paste("Refused strategies (decreased below the threshold):", nrow(your_strategies_below_threshold)))
+print(your_strategies_below_threshold)
+
+# your_plots_for_each_strategy
+# (1) To access a specific plot from the plot list your_plots_for_each_strategy, you would index it using the strategy name as follows:
+# In the place of "Strategy Name", use the exact name of the strategy you're interested in, like "US", "Europe", "World", etc.
+specific_plot = your_plots_for_each_strategy[["US"]]
+print(specific_plot)
+
+# (2) If you would like to display multiple plots together, you can use the gridExtra package. 
+# You need to specify the plots you want to display as follows:
+grid.arrange(
+  your_plots_for_each_strategy[["Europe"]],
+  your_plots_for_each_strategy[["Gold bullion"]],
+  ncol = 1  # Or any other number of columns you want
+)
+# Notice that, for a given investment strategy, the algorithm analyzes all relevant time periods. 
+# We display only a subset of this, for illustration purposes.
+
+# your_plot_lowest_returns_for_each_strategy
+# Plot the intermediate evolution of the lowest cumulative return series for each investment strategy (different colors for non-refused "group 1 strategies", and refused "group 2 strategies")
+print(your_plot_lowest_returns_for_each_strategy)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 #### Algo parallel processing ####
 
@@ -530,7 +570,18 @@ for (i in 1:nrow(result)) {
 
 
 
-
+# (3b) evaluating the out-of-sample performance of such strategies.
+# ..................
+# ..................
+# ..................
+# ..................
+# ..................
+# ..................
+# ..................
+# ..................
+# ..................
+# ..................
+# ..................
 
 
 
