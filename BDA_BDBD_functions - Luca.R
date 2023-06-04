@@ -152,7 +152,7 @@ generate_weighted_cols_daily_rebal <- function(index_returns, max_comb_size) {
       new_col <- rowMeans(investment_strategies[, combo])
       
       # Create the new column name
-      new_col_name <- paste(names(investment_strategies)[combo], collapse = " | ")
+      new_col_name <- paste(names(investment_strategies)[combo], collapse = " & ")
       
       # Add the new column to the dataframe
       index_returns[[new_col_name]] <- new_col
@@ -275,52 +275,66 @@ plot_mean_variance_graph <- function(df_return_series) {
 }
 
 
-# Define a function that determines for a specified time horizon and a specified minimum acceptable percentage value (minimum threshold):
-# [1] for each investment strategy, the lowest cumulative return out of all historic time periods that corresponds to the specified time horizon; 
-# [2] which investment strategies should be refused because their value dropped below the minimum threshold at any point over any historic time period that corresponds to the specified time horizon (group 2 strategies)
-# [3] a plot that displays (i) the intermediate evolution of the lowest cumulative return series for each investment strategy (different colors for non-refused "group 1 strategies", and refused "group 2 strategies"), for each separate time period's first day until its final day, and (ii) a horizontal dashed line that shows the minimum threshold
-determine_optimal_strategy <- function(df_return_series, time_horizon_years, minimum_allowable_percentage) {
-  # Start timer to later display how long the function took to run
-  start_time <- Sys.time()
+#' A comprehensive analysis function to determine the optimal investment strategy based on historical data.
+#' 
+#' This function takes into consideration all possible start times within a given time horizon and a minimum acceptable cumulative return.
+#' The function implements two main computations:
+#' 1. For each strategy, it evaluates all possible periods within the specified time horizon, and keeps track of the lowest and highest cumulative return.
+#' 2. It discards strategies that at any point drop below the minimum acceptable cumulative return, and it identifies the optimal strategy as the one with the highest minimum cumulative return.
+#' The function also generates several plots to visualize the the different historic return series for each strategy and the evolution of the lowest cumulative return.
+#' 
+#' @param df_return_series A data frame containing the return series of different strategies.
+#' @param time_horizon_years The time horizon in years.
+#' @param minimum_allowable_percentage The minimum allowable cumulative return percentage below which a strategy should be excluded.
+#' 
+#' @return A list containing the following elements:
+#' - plot_lowest_cum_returns: a ggplot object illustrating the evolution of the lowest cumulative return series for each investment strategy.
+#' - optimal_strategy: the optimal investment strategy identified.
+#' - plot_optimal_strategy: a ggplot object that visualizes worst-case, best-case, and other return series for the optimal strategy.
+#' - df_above_threshold: a data frame containing strategies that have not been excluded, their lowest and highest cumulative returns.
+#' - df_refused: a data frame containing excluded strategies, their lowest and highest cumulative returns.
+#' - plot_list_different_periods_within_strategies: a list of ggplot objects, each representing cumulative returns for different starting dates for a particular strategy.
+#' 
+determine_optimal_strategy_v1 <- function(df_return_series, time_horizon_years, minimum_allowable_percentage) {
+  # Start timer for performance tracking
+  total_function_start <- Sys.time()
   
-  # Initialize number of rows (days) per year
-  # For example, the average number of trading days per year from 1990 to 2022 has been exactly 252.00.
+  # Initialize constants and variables
   days_per_year <- 252  
-  
-  # Convert time horizon "in years" to time horizon in "trading days"
   time_horizon_days <- time_horizon_years * days_per_year
   
-  # Initialize results
+  # Initialize data frames to store results
   df_above_threshold <- data.frame(Strategy = character(), LowestCumulativeReturn = numeric())
   df_refused <- data.frame(Strategy = character(), LowestCumulativeReturn = numeric())
-  lowest_series <- list()
   
-  # Initialize a list to store plots that display return series for different time periods, given separate investment strategies
+  # Initialize lists to store the lowest and highest return series for each strategy
+  lowest_series <- list()
+  highest_series <- list()
+  
+  # Initialize a list to store return series of the optimal strategy
+  optimal_strategy_series <- list()
+  
+  # Initialize a list to store ggplot objects for each strategy.
+  # Each ggplot object represents cumulative returns for different starting dates for a particular strategy.
   plot_list_different_periods_within_strategies <- list()
   
-  # Loop over each candidate investment strategy (columns in the data frame):
-  # [1] to determine its lowest cumulative return out of all historic time periods that corresponds to the specified time horizon
-  # [2] to determine which investment strategies should be refused because their value dropped below the minimum threshold at any point over any historic time period that corresponds to the specified time horizon
-  # [3] to store data about the intermediate evolution of the lowest cumulative return series
+  # Main loop over each strategy
   for (col in names(df_return_series)[-1]) {
-    lowest_cumulative_return <- Inf
-    lowest_cumulative_series <- NULL
-    exclude <- FALSE
     
-    # Initialize a df for storing all series data
+    # Initialization of variables for current strategy
+    lowest_cumulative_return <- Inf
+    highest_cumulative_return <- -Inf 
+    lowest_cumulative_series <- NULL
+    highest_cumulative_series <- NULL 
+    exclude <- FALSE
     df_series_to_plot <- data.frame()
     
-    # In the current candidate investment strategy, loop over each starting point of the period:
-    # [1] to determine the cumulative return of the subsequent time period that corresponds to the specified time horizon, and to compare this cumulative return to the previously determined lowest cumulative return, so we always keep track of the lowest cumulative return series 
-    # [2] to determine whether the value drops below the minimum threshold at any point during the time period that corresponds to the specified time horizon, so that we would refuse the current investment strategy altogether.
-    # [3] to update the data about the intermediate evolution of the lowest cumulative return series, if the time period corresponding to the current starting point indeed delivers the lowest cumulative return.
+    # Loop over all possible starting times for the specified time horizon
     for (i in 1:(nrow(df_return_series) - time_horizon_days + 1)) {
-      # Calculate the cumulative returns between current day i and any subsequent day until the end of the time period length
+      # Compute cumulative returns for the current time period
       cum_returns_time_period <- cumprod(1 + df_return_series[i:(i + time_horizon_days - 1), col])
       
-      # ------------- COMPUTATIONALLY HEAVY -------------
-      # For a given investment strategy, the algorithm analyzes all time periods. We will display a subset of this for illustration purposes.
-      # Every curve implies a different start date. If we plot i %% 252 curves, it plots 1 curve per year; If we plot i %% 21, it plots 1 curve per month; If we plot i %% 5, it plots 1 curve per week.
+      # Compute series to plot for every year (for visualization purposes)
       if(i %% 252 == 0) {
         df <- data.frame(Year = 1:length(cum_returns_time_period)/252, 
                          CumReturns = cum_returns_time_period,
@@ -329,71 +343,68 @@ determine_optimal_strategy <- function(df_return_series, time_horizon_years, min
         # Combine this df with the df for all series
         df_series_to_plot <- rbind(df_series_to_plot, df)
       }
-
-      # If the cumulative return at any point is below the minimum threshold, mark to exclude and break
+      
+      # Check if the minimum cumulative return is below the threshold and set the flag to exclude the strategy if so
       if (any(cum_returns_time_period < minimum_allowable_percentage)) {
         exclude <- TRUE
         ################# break # We deleted this break from the code, because we are still interested in all the graphs
       }
       
-      # If the cumulative return at the end of the period is the lowest so far, store it and the return series
+      # Keep track of the lowest cumulative return for the current strategy
       if (cum_returns_time_period[length(cum_returns_time_period)] < lowest_cumulative_return) {
         lowest_cumulative_return <- cum_returns_time_period[length(cum_returns_time_period)]
         lowest_cumulative_series <- cum_returns_time_period
       }
+      
+      # Keep track of the highest cumulative return for the current strategy
+      if (cum_returns_time_period[length(cum_returns_time_period)] > highest_cumulative_return) {
+        highest_cumulative_return <- cum_returns_time_period[length(cum_returns_time_period)]
+        highest_cumulative_series <- cum_returns_time_period
+      }
     }
     
-    # ------------- COMPUTATIONALLY HEAVY -------------
-    # After the loop, plot all series for the current investment strategy on one graph
+    # Generate plot displaying all series of cumulative returns for the current investment strategy. 
+    # Each series represents a different start time within the time horizon.
     plot_different_periods_within_strategy <- 
       ggplot(df_series_to_plot, aes(x=Year, y=CumReturns, color=Series_ID)) +
       geom_line() +
       geom_hline(yintercept = minimum_allowable_percentage, linetype = "dashed", color = "red") +
       labs(x = "Years invested", y = "Cumulative Return", title = paste("Cumulative returns for different starting dates (subset of actual analysis), for", col)) +
-      theme(legend.position="none")
+      theme(legend.position="none") +
+      scale_y_continuous(limits = c(0, NA))
     
-    # ------------- COMPUTATIONALLY HEAVY -------------
-    # Append the plot to the list
+    # The resulting plot is added to the list `plot_list_different_periods_within_strategies` for later use.
     plot_list_different_periods_within_strategies[[col]] <- plot_different_periods_within_strategy
-    
-    # (1) To access a specific plot from the plot list plot_list_different_periods_within_strategies, you would index it using the strategy name as follows:
-    # specific_plot = plot_list_different_periods_within_strategies[["Strategy Name"]]
-    # print(specific_plot)
-    # In the place of "Strategy Name", use the exact name of the strategy you're interested in, 
-    # like "US", "Europe", "World", etc.
-    # (2) If you would like to display multiple plots together, you can use the gridExtra package. You need to specify the plots you want to display as follows:
-    # library(gridExtra)
-    # grid.arrange(
-    #   plot_list_different_periods_within_strategies[["US"]],
-    #   plot_list_different_periods_within_strategies[["Europe"]],
-    #   plot_list_different_periods_within_strategies[["Gold bullion"]],
-    #   ncol = 1  # Or any other number of columns you want
-    # )
     
     # If the strategy is marked for exclusion, add to df_refused, else add to df_above_threshold
     if (exclude == TRUE) {
-      df_refused <- rbind(df_refused, data.frame(Strategy = col, LowestCumulativeReturn = lowest_cumulative_return))
+      df_refused <- rbind(df_refused, data.frame(Strategy = col, LowestCumulativeReturn = lowest_cumulative_return, HighestCumulativeReturn = highest_cumulative_return))
       lowest_series[[col]] <- lowest_cumulative_series
+      highest_series[[col]] <- highest_cumulative_series 
     } else {
-      df_above_threshold <- rbind(df_above_threshold, data.frame(Strategy = col, LowestCumulativeReturn = lowest_cumulative_return))
+      df_above_threshold <- rbind(df_above_threshold, data.frame(Strategy = col, LowestCumulativeReturn = lowest_cumulative_return, HighestCumulativeReturn = highest_cumulative_return))
       lowest_series[[col]] <- lowest_cumulative_series
+      highest_series[[col]] <- highest_cumulative_series
     }
   }
   
-  # Generate a plot that displays the intermediate evolution of the lowest cumulative return series for each investment strategy (different colors for non-refused "group 1 strategies", and refused "group 2 strategies")
-  # Preprocess data for plotting
+  # Select the optimal strategy as the one with the highest minimum cumulative return that didn't fall below the threshold
+  optimal_strategy <- df_above_threshold[which.max(df_above_threshold$LowestCumulativeReturn), "Strategy"]
+  
+  # Prepare data for plotting lowest cumulative returns for each strategy, categorizing them as above_threshold or excluded
   plot_lowest_cum_returns_data <- do.call(rbind, lapply(names(lowest_series), function(name) {
     group <- ifelse(name %in% df_above_threshold$Strategy, "above_threshold", "excluded")
     data.frame(Year = 1:length(lowest_series[[name]])/252, Return = lowest_series[[name]], Strategy = name, Group = group, stringsAsFactors = FALSE)
   }))
   
-  # Define color mapping with alpha transparency for the excluded group
+  # Assign colors for the plot: 'darkgreen' for strategies above threshold and 'gray90' for excluded strategies
   color_mapping <- setNames(ifelse(unique(plot_lowest_cum_returns_data$Strategy) %in% df_above_threshold$Strategy, "darkgreen", "gray90"), unique(plot_lowest_cum_returns_data$Strategy))
   
-  # Change the levels of the 'Group' factor so the above_threshold group plots last (on top)
+  # Rearrange the order of the 'Group' factor to ensure 'above_threshold' group is plotted last (and therefore on top)
   plot_lowest_cum_returns_data$Group <- factor(plot_lowest_cum_returns_data$Group, levels = c("excluded", "above_threshold"))
   
-  # Generate the plot
+  # Generate a plot illustrating the evolution of the lowest cumulative return series for each investment strategy 
+  # Strategies are color-coded based on group - 'above_threshold' and 'excluded'
   plot_lowest_cum_returns <- 
     ggplot(plot_lowest_cum_returns_data, aes(x = Year, y = Return, color = Strategy, group = Strategy)) +
     geom_line(data = subset(plot_lowest_cum_returns_data, Group == "excluded")) +
@@ -402,17 +413,38 @@ determine_optimal_strategy <- function(df_return_series, time_horizon_years, min
     geom_hline(yintercept = minimum_allowable_percentage, linetype = "dashed", color = "red") +
     labs(title = "Lowest cumulative return series, for each candidate investment strategy", x = "Years invested", y = "Cumulative return") +
     theme_minimal() +
-    theme(legend.position="none")
-
-  # Display how long the function took to run
-  end_time <- Sys.time()
-  execution_time <- as.numeric(end_time - start_time, units = "secs")
-  print(paste("Execution time: ", execution_time, "seconds"))
+    theme(legend.position="none") +
+    scale_y_continuous(limits = c(0, NA))
   
-  # Return, for a specified time horizon and a specified minimum acceptable percentage value (minimum threshold):
-  # [1] for each investment strategy, the lowest cumulative return out of all historic time periods that corresponds to the specified time horizon; 
-  # [2] which investment strategies should be refused because their value dropped below the minimum threshold at any point over any historic time period that corresponds to the specified time horizon (group 2 strategies)
-  # [3] a plot that displays (i) the intermediate evolution of the lowest cumulative return series for each investment strategy (different colors for non-refused "group 1 strategies", and refused "group 2 strategies"), for each separate time period's first day until its final day, and (ii) a horizontal dashed line that shows the minimum threshold
-  return(list(df_above_threshold, df_refused, plot_list_different_periods_within_strategies, plot_lowest_cum_returns))
+  # Extract plot data for the optimal strategy
+  plot_optimal_strategy_data <- ggplot_build(plot_list_different_periods_within_strategies[[optimal_strategy]])$data[[1]]
+  
+  # Generate a plot that visualizes worst-case, best-case, and other return series for the optimal strategy
+  plot_optimal_strategy <- 
+    ggplot() +
+    geom_line(data = plot_optimal_strategy_data, aes(x = x, y = y, color = colour), alpha = 0.2) +
+    geom_line(data = data.frame(Year = 1:length(lowest_series[[optimal_strategy]])/252, Return = lowest_series[[optimal_strategy]]), aes(x = Year, y = Return), color = "red") +
+    geom_line(data = data.frame(Year = 1:length(highest_series[[optimal_strategy]])/252, Return = highest_series[[optimal_strategy]]), aes(x = Year, y = Return), color = "green") +
+    geom_hline(yintercept = minimum_allowable_percentage, linetype = "dashed", color = "red") +
+    labs(title = paste("Worst-case, best-case and other historic return series for your optimal strategy:", optimal_strategy), x = "Years invested", y = "Cumulative return") +
+    theme_minimal() +
+    theme(legend.position="none") +
+    scale_y_continuous(limits = c(0, NA))
+  
+  # Compute and print the total execution time of the function
+  total_function_end <- Sys.time()
+  total_function_time <- as.numeric(total_function_end - total_function_start, units = "secs")
+  print(paste("Execution time for TOTAL FUNCTION: ", total_function_time, "seconds"))
+  
+  # Return the plots, optimal strategy, and data frames of results
+  return(list(plot_lowest_cum_returns, optimal_strategy, plot_optimal_strategy, df_above_threshold, df_refused, plot_list_different_periods_within_strategies, total_function_time))
 }
+
+
+
+
+
+
+
+
 

@@ -318,39 +318,56 @@ plot_mean_variance_graph(strategies_max_4_comb_daily_rebal)
 
 # ------------------------------------------------------------------------------------------------------#
 
-#### SAVE CURRENT WORKSPACE / LOAD CURRENT WORKSPACE ####
+### SAVE CURRENT WORKSPACE / LOAD CURRENT WORKSPACE ###
 
 # Save all objects in the workspace to a file named 'my_workspace.RData'
-save.image('my_workspace.RData')
+# save.image('max_4_comb_daily_rebal.RData')
+
+# Get the directory path of the current code file
+PATH <- dirname(rstudioapi::getSourceEditorContext()$path)
+# Set the working directory to that of the current code file 
+setwd(PATH)
 # Load the objects from 'my_workspace.RData' into the workspace
 # It's a good practice to start a new session or clear the workspace before loading the saved objects.
-load('my_workspace.RData')
+load('max_4_comb_daily_rebal.RData')
+
 # Load functions file
 source("BDA_BDBD_functions - Luca.R")
+library(gridExtra)
 
-# ------------------------------------------------------------------------------------------------------#
+
+# ------------------------------------------------------------------------------------------------------ #
 
 
 # (PART 3) The most challenging analysis:
-# (PART 3A) determining the unique optimal strategy that corresponds exactly to a given user-specified set of investment parameters 
+# (PART 3A) Based on historical data, determine the optimal investment strategy that corresponds exactly to a given user-specified set of investment parameters 
 
-# Determine for a specified time horizon and a specified minimum acceptable percentage value (minimum threshold):
-# [1] for each investment strategy, the lowest cumulative return out of all historic time periods that corresponds to the specified time horizon; 
-# [2] which investment strategies should be refused because their value dropped below the minimum threshold at any point over any historic time period that corresponds to the specified time horizon (group 2 strategies)
-# [3] a plot that displays (i) the intermediate evolution of the lowest cumulative return series for each investment strategy (different colors for non-refused "group 1 strategies", and refused "group 2 strategies"), for each separate time period's first day until its final day, and (ii) a horizontal dashed line that shows the minimum threshold
 
-# Call function determine_optimal_strategy
-# Note: function "determine_optimal_strategy" returns 4 objects: list(df_above_threshold, df_excluded, plot_list_different_periods_within_strategies, plot_lowest_cum_returns
-# ----- COMPUTATIONALLY INEFFICIENT -----
-your_candidate_strategies_results <- determine_optimal_strategy(df_return_series = index_daily_returns_CHF, 
-                                                                time_horizon_years = 10, 
-                                                                minimum_allowable_percentage = 0.75)
+# ---------------------------------------------------------------------------- #
 
-# Extract separate results from that is contained in your_candidate_strategies_results (results from function determine_optimal_strategy)
-your_strategies_above_threshold <- your_candidate_strategies_results[[1]]
-your_strategies_below_threshold <- your_candidate_strategies_results[[2]]
-your_plots_for_each_strategy <- your_candidate_strategies_results[[3]]
-your_plot_lowest_returns_for_each_strategy <- your_candidate_strategies_results[[4]]
+# Call the function determine_optimal_strategy_v1 with the specified input parameters
+# Remark that it returns 7 objects: list(plot_lowest_cum_returns, optimal_strategy, plot_optimal_strategy, df_above_threshold, df_refused, plot_list_different_periods_within_strategies, total_function_time)
+
+# Extract the results from the function output into individual variables
+your_plot_lowest_returns_for_each_strategy <- your_candidate_strategies_results_v1[[1]]
+your_optimal_strategy <- your_candidate_strategies_results_v1[[2]]
+your_plot_optimal_strategy <- your_candidate_strategies_results_v1[[3]]
+your_strategies_above_threshold <- your_candidate_strategies_results_v1[[4]]
+your_strategies_below_threshold <- your_candidate_strategies_results_v1[[5]]
+your_plots_for_each_strategy <- your_candidate_strategies_results_v1[[6]]
+
+# your_plot_lowest_returns_for_each_strategy
+# Plot the intermediate evolution of the lowest cumulative return series for each investment strategy (different colors for non-refused "group 1 strategies", and refused "group 2 strategies")
+print(your_plot_lowest_returns_for_each_strategy)
+
+# your_optimal_strategy
+# Print the optimal strategy (the one strategy that delivers the best "lowest cumulative return" out of all strategies that always stayed above the threshold)
+print(paste("The optimal strategy (delivers the best 'lowest cumulative return' out of all strategies that always stayed above the threshold):"))
+print(your_optimal_strategy)
+
+# plot_optimal_strategy
+# Plot the optimal strategy's worst-case, best-case and other cumulative return series 
+print(your_plot_optimal_strategy)
 
 # your_strategies_above_threshold
 # Print strategies that stayed above the threshold
@@ -365,22 +382,172 @@ print(your_strategies_below_threshold)
 # your_plots_for_each_strategy
 # (1) To access a specific plot from the plot list your_plots_for_each_strategy, you would index it using the strategy name as follows:
 # In the place of "Strategy Name", use the exact name of the strategy you're interested in, like "US", "Europe", "World", etc.
-specific_plot = your_plots_for_each_strategy[["Gold bullion"]]
+specific_plot = your_plots_for_each_strategy[["US"]]
 print(specific_plot)
 
 # (2) If you would like to display multiple plots together, you can use the gridExtra package. 
 # You need to specify the plots you want to display as follows:
 grid.arrange(
+  your_plots_for_each_strategy[[your_optimal_strategy]],
   your_plots_for_each_strategy[["Europe"]],
-  your_plots_for_each_strategy[["Gold bullion"]],
   ncol = 1  # Or any other number of columns you want
 )
 # Notice that, for a given investment strategy, the algorithm analyzes all relevant time periods. 
 # We display only a subset of this, for illustration purposes.
 
+
+# ---------------------------------------------------------------------------- #
+
+# Let's again call the function determine_optimal_strategy_v1, but compare outcomes and processing times 
+# between different strategies, for various time horizons and minimum allowable percentages...
+
+# Define the range of years and minimum allowable percentage to compare different strategies over different time horizons and thresholds
+your_time_horizon_years <- seq(8, 12, 4)
+your_minimum_allowable_percentage <- seq(0.50, 0.75, 0.25)
+
+# Initialize an empty list to store the comparison results
+compare_results_v1 <- list()
+
+# Compare different strategies for various time horizons and minimum allowable percentages
+for (years in your_time_horizon_years) {
+  for (minimum_value in your_minimum_allowable_percentage) {
+    # Call the function determine_optimal_strategy_v1 with the specified input parameters
+    your_candidate_strategies_results_v1 <- determine_optimal_strategy_v1(df_return_series = index_daily_returns_CHF, 
+                                                                          time_horizon_years = years, 
+                                                                          minimum_allowable_percentage = minimum_value)
+    
+    # Extract the results from the function output into individual variables
+    your_plot_lowest_returns_for_each_strategy <- your_candidate_strategies_results_v1[[1]]
+    your_optimal_strategy <- your_candidate_strategies_results_v1[[2]]
+    your_plot_optimal_strategy <- your_candidate_strategies_results_v1[[3]]
+    your_strategies_above_threshold <- your_candidate_strategies_results_v1[[4]]
+    your_strategies_below_threshold <- your_candidate_strategies_results_v1[[5]]
+    your_plots_for_each_strategy <- your_candidate_strategies_results_v1[[6]]
+    your_total_function_time <- your_candidate_strategies_results_v1[[7]]
+    
+    # Create a new element in the compare_results_v1 list for the current combination of years and minimum_value
+    compare_results_v1[[paste0("years_", years, "_min_", minimum_value)]] <- list(
+      PlotLowestReturns = your_plot_lowest_returns_for_each_strategy,
+      OptimalStrategy = your_optimal_strategy,
+      PlotOptimalStrategy = your_plot_optimal_strategy,
+      StrategiesAboveThreshold = your_strategies_above_threshold,
+      StrategiesBelowThreshold = your_strategies_below_threshold,
+      PlotsForEachStrategy = your_plots_for_each_strategy,
+      TotalFunctionTime = your_total_function_time
+    )
+  }
+}
+
+# Initialize an empty data frame to compare optimal strategies and total function times for different combinations of years and minimum values
+comparison_df_v1 <- data.frame()
+
+# Loop over the compare_results_v1 list
+for(i in 1:length(compare_results_v1)) {
+  # Extract the name (which includes the years and minimum_value)
+  name <- names(compare_results_v1[i])
+  # Extract the optimal strategy and total function time
+  optimal_strategy <- compare_results_v1[[i]]$OptimalStrategy
+  total_function_time <- compare_results_v1[[i]]$TotalFunctionTime
+  
+  # Extract the years and minimum value from the name
+  years_min_val <- strsplit(name, "_")
+  years <- as.numeric(years_min_val[[1]][2])
+  min_val <- as.numeric(years_min_val[[1]][4])
+  
+  # Append the results to the comparison data frame
+  comparison_df <- rbind(comparison_df, 
+                         data.frame(
+                           Years = years,
+                           MinVal = min_val,
+                           OptimalStrategy = optimal_strategy,
+                           TotalFunctionTime = total_function_time
+                         ))
+}
+
+# Compare optimal strategies and total function times for different combinations of years and minimum values
+print(comparison_df)
+
+# ---------------------------------------------------------------------------- #
+
+# Access the results for a specific combination of years and minimum_value (e.g.,: 8 years; 0.50 minimum_value)
+years <- 8
+minimum_value <- 0.50
+result <- compare_results_v1[[paste0("years_", years, "_min_", minimum_value)]]
+
+# Extract and display the values from the result
+
 # your_plot_lowest_returns_for_each_strategy
 # Plot the intermediate evolution of the lowest cumulative return series for each investment strategy (different colors for non-refused "group 1 strategies", and refused "group 2 strategies")
-print(your_plot_lowest_returns_for_each_strategy)
+print(result$PlotLowestReturns)
+
+# your_optimal_strategy
+# Print the optimal strategy (the one strategy that delivers the best "lowest cumulative return" out of all strategies that always stayed above the threshold)
+print(paste("The optimal strategy (delivers the best 'lowest cumulative return' out of all strategies that always stayed above the threshold):"))
+print(result$OptimalStrategy)
+
+# plot_optimal_strategy
+# Plot the optimal strategy's worst-case, best-case and other cumulative return series 
+print(result$PlotOptimalStrategy)
+
+# your_strategies_above_threshold
+# Print strategies that stayed above the threshold
+print(paste("Strategies that stayed above the threshold:", nrow(your_strategies_above_threshold)))
+print(result$StrategiesAboveThreshold)
+
+# your_strategies_below_threshold
+# Print strategies that are refused for having decreased below the threshold
+print(paste("Refused strategies (decreased below the threshold):", nrow(your_strategies_below_threshold)))
+print(result$StrategiesBelowThreshold)
+
+# your_plots_for_each_strategy
+# (1) To access a specific plot from the plot list your_plots_for_each_strategy, you would index it using the strategy name as follows:
+# In the place of "Strategy Name", use the exact name of the strategy you're interested in, like "US", "Europe", "World", etc.
+specific_plot = result$PlotsForEachStrategy[["US"]]
+print(specific_plot)
+
+# (2) If you would like to display multiple plots together, you can use the gridExtra package. 
+# You need to specify the plots you want to display as follows:
+grid.arrange(
+  result$PlotsForEachStrategy[[result$OptimalStrategy]],
+  result$PlotsForEachStrategy[["Europe"]],
+  ncol = 1  # Or any other number of columns you want
+)
+# Notice that, for a given investment strategy, the algorithm analyzes all relevant time periods. 
+# We display only a subset of this, for illustration purposes.
+
+# your_total_function_time
+# Print the total execution time of the function 
+print(result$TotalFunctionTime)
+
+
+# ---------------------------------------------------------------------------- #
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 # ------------------------------------------------------------------------------------------------ #
@@ -389,15 +556,18 @@ print(your_plot_lowest_returns_for_each_strategy)
 # --> LUCA: a more computationally efficient "determine_optimal_strategy" function; 
 # --> MARCO/ARIQ(2) big data methods (parallel processing / cloud services) for extra computational efficiency (storage + processing) --> 
 
-# your_candidate_strategies_results_2 <- determine_optimal_strategy(df_return_series = strategies_max_2_comb_daily_rebal, 
-#                                                                   time_horizon_years = 5, 
-#                                                                   minimum_allowable_percentage = 0.75)
-# your_candidate_strategies_results_3 <- determine_optimal_strategy(df_return_series = strategies_max_3_comb_daily_rebal, 
-#                                                                   time_horizon_years = 10, 
-#                                                                   minimum_allowable_percentage = 0.75)
+# your_candidate_strategies_results_2 <- determine_optimal_strategy(df_return_series = strategies_max_2_comb_daily_rebal,
+                                                                  # time_horizon_years = 5,
+                                                                  # minimum_allowable_percentage = 0.75)
+
+your_candidate_strategies_results_3 <- determine_optimal_strategy(df_return_series = strategies_max_3_comb_daily_rebal,
+                                                                  time_horizon_years = 10,
+                                                                  minimum_allowable_percentage = 0.75)
+
 # your_candidate_strategies_results_4 <- determine_optimal_strategy(df_return_series = strategies_max_4_comb_daily_rebal, 
 #                                                                   time_horizon_years = 10, 
 #                                                                   minimum_allowable_percentage = 0.75)
+
 # your_candidate_strategies_results_5 <- determine_optimal_strategy(df_return_series = strategies_max_5_comb_daily_rebal, 
 #                                                                   time_horizon_years = 10, 
 #                                                                   minimum_allowable_percentage = 0.75)
