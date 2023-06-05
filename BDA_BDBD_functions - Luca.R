@@ -1,3 +1,7 @@
+
+
+
+
 # Import packages
 library(dplyr)
 library(zoo)
@@ -434,26 +438,27 @@ determine_optimal_strategy_v1 <- function(df_return_series, time_horizon_years, 
   # Compute and print the total execution time of the function
   total_function_end <- Sys.time()
   total_function_time <- as.numeric(total_function_end - total_function_start, units = "secs")
-  print(paste("Execution time for TOTAL FUNCTION: ", total_function_time, "seconds"))
+  print(paste("Execution time for TOTAL FUNCTION: ", round(total_function_time, 2), "seconds"))
   
   # Return the plots, optimal strategy, and data frames of results
   return(list(plot_lowest_cum_returns, optimal_strategy, plot_optimal_strategy, df_above_threshold, df_refused, plot_list_different_periods_within_strategies, total_function_time))
 }
 
 
-#' An auxiliary function that loops over various scenarios for the determine_optimal_strategy_v1 function.
+#' An auxiliary function that loops over various scenarios for the specified optimization function.
 #' 
-#' This function performs a comprehensive sweep of the determine_optimal_strategy_v1 function over different time horizons 
+#' This function performs a comprehensive sweep of the specified optimization function over different time horizons 
 #' and minimum allowable cumulative returns. This allows us to see how the optimal strategy changes with these parameters.
 #' 
 #' @param df_return_series A data frame containing the return series of different strategies.
 #' @param time_horizon_years An array containing various time horizons in years to be tested.
 #' @param minimum_allowable_percentage An array containing various minimum allowable cumulative return percentages to be tested.
-#' 
+#' @param optimization_function An optimization function (e.g. 'determine_optimal_strategy_v1') that inputs the same arguments as the original function and outputs optimized results.
+#' #' 
 #' @return A list containing the following elements:
 #' - df_comparison: a data frame containing the optimal strategies and calculation times for different combinations of years and minimum values.
 #' - results_compared: a list storing more detailed information from each run, including plots and strategies that are above and below the specified threshold.
-compare_results_v1 <- function(df_return_series, time_horizon_years, minimum_allowable_percentage) {
+compare_results <- function(df_return_series, time_horizon_years, minimum_allowable_percentage, optimization_function) {
   # Initialize an empty list to store the comparison results
   results_compared <- list()
   
@@ -461,7 +466,7 @@ compare_results_v1 <- function(df_return_series, time_horizon_years, minimum_all
   for (years in time_horizon_years) {
     for (minimum_value in minimum_allowable_percentage) {
       # Call the function determine_optimal_strategy_v1 with the specified input parameters
-      results_candidate_strategies <- determine_optimal_strategy_v1(df_return_series = index_daily_returns_CHF, 
+      results_candidate_strategies <- optimization_function(df_return_series = index_daily_returns_CHF, 
                                                                     time_horizon_years = years, 
                                                                     minimum_allowable_percentage = minimum_value)
       
@@ -527,13 +532,189 @@ compare_results_v1 <- function(df_return_series, time_horizon_years, minimum_all
 
 
 
-determine_optimal_strategy_v2 <- function() {
+
+# Define a function that determines the optimal investment strategy based on historical data and includes various timers
+determine_optimal_strategy_v1_timers <- function(df_return_series, time_horizon_years, minimum_allowable_percentage) {
+  # Start timer for performance tracking of TOTAL FUNCTION
+  total_function_start_0 <- Sys.time()
   
+  # Start timer for performance tracking of part 1
+  timer_start_1 <- Sys.time()
   
+  # Initialize constants and variables
+  days_per_year <- 252  
+  time_horizon_days <- time_horizon_years * days_per_year
   
+  # Initialize data frames to store results
+  df_above_threshold <- data.frame(Strategy = character(), LowestCumulativeReturn = numeric())
+  df_refused <- data.frame(Strategy = character(), LowestCumulativeReturn = numeric())
   
+  # Initialize lists to store the lowest and highest return series for each strategy
+  lowest_series <- list()
+  highest_series <- list()
   
-  return()
+  # Initialize a list to store return series of the optimal strategy
+  optimal_strategy_series <- list()
+  
+  # Initialize a list to store ggplot objects for each strategy.
+  # Each ggplot object represents cumulative returns for different starting dates for a particular strategy.
+  plot_list_different_periods_within_strategies <- list()
+  
+  # Compute and print the total execution time of part 1
+  timer_end_1 <- Sys.time()
+  timer_1 <- as.numeric(timer_end_1 - timer_start_1, units = "secs")
+  print(paste("Execution time for PART 1: ", round(timer_1, 2), "seconds"))
+  
+  # Start timer for performance tracking of part 2
+  timer_start_2 <- Sys.time()
+  
+  # Main loop over each strategy
+  for (col in names(df_return_series)[-1]) {
+    
+    # Initialization of variables for current strategy
+    lowest_cumulative_return <- Inf
+    highest_cumulative_return <- -Inf 
+    lowest_cumulative_series <- NULL
+    highest_cumulative_series <- NULL 
+    exclude <- FALSE
+    df_series_to_plot <- data.frame()
+    
+    # Start timer for performance tracking of part 5
+    timer_start_5 <- Sys.time()
+    
+    # Loop over all possible starting times for the specified time horizon
+    for (i in 1:(nrow(df_return_series) - time_horizon_days + 1)) {
+      # Compute cumulative returns for the current time period
+      cum_returns_time_period <- cumprod(1 + df_return_series[i:(i + time_horizon_days - 1), col])
+      
+      # Compute series to plot for every year (for visualization purposes)
+      if(i %% 252 == 0) {
+        df <- data.frame(Year = 1:length(cum_returns_time_period)/252, 
+                         CumReturns = cum_returns_time_period,
+                         Series_ID = paste("Series", i)) # Identifier for each series
+        
+        # Combine this df with the df for all series
+        df_series_to_plot <- rbind(df_series_to_plot, df)
+      }
+      
+      # Check if the minimum cumulative return is below the threshold and set the flag to exclude the strategy if so
+      if (any(cum_returns_time_period < minimum_allowable_percentage)) {
+        exclude <- TRUE
+        ################# break # We deleted this break from the code, because we are still interested in all the graphs
+      }
+      
+      # Keep track of the lowest cumulative return for the current strategy
+      if (cum_returns_time_period[length(cum_returns_time_period)] < lowest_cumulative_return) {
+        lowest_cumulative_return <- cum_returns_time_period[length(cum_returns_time_period)]
+        lowest_cumulative_series <- cum_returns_time_period
+      }
+      
+      # Keep track of the highest cumulative return for the current strategy
+      if (cum_returns_time_period[length(cum_returns_time_period)] > highest_cumulative_return) {
+        highest_cumulative_return <- cum_returns_time_period[length(cum_returns_time_period)]
+        highest_cumulative_series <- cum_returns_time_period
+      }
+    }
+    
+    # Compute and print the total execution time of part 5
+    timer_end_5 <- Sys.time()
+    timer_5 <- as.numeric(timer_end_5 - timer_start_5, units = "secs")
+    print(paste("Execution time for PART 5: ", round(timer_5, 2), "seconds"))
+    
+    # Generate plot displaying all series of cumulative returns for the current investment strategy. 
+    # Each series represents a different start time within the time horizon.
+    plot_different_periods_within_strategy <- 
+      ggplot(df_series_to_plot, aes(x=Year, y=CumReturns, color=Series_ID)) +
+      geom_line() +
+      geom_hline(yintercept = minimum_allowable_percentage, linetype = "dashed", color = "red") +
+      labs(x = "Years invested", y = "Cumulative Return", title = paste("Cumulative returns for different starting dates (subset of actual analysis), for", col)) +
+      theme(legend.position="none") +
+      scale_y_continuous(limits = c(0, NA))
+    
+    # The resulting plot is added to the list `plot_list_different_periods_within_strategies` for later use.
+    plot_list_different_periods_within_strategies[[col]] <- plot_different_periods_within_strategy
+    
+    # If the strategy is marked for exclusion, add to df_refused, else add to df_above_threshold
+    if (exclude == TRUE) {
+      df_refused <- rbind(df_refused, data.frame(Strategy = col, LowestCumulativeReturn = lowest_cumulative_return, HighestCumulativeReturn = highest_cumulative_return))
+      lowest_series[[col]] <- lowest_cumulative_series
+      highest_series[[col]] <- highest_cumulative_series 
+    } else {
+      df_above_threshold <- rbind(df_above_threshold, data.frame(Strategy = col, LowestCumulativeReturn = lowest_cumulative_return, HighestCumulativeReturn = highest_cumulative_return))
+      lowest_series[[col]] <- lowest_cumulative_series
+      highest_series[[col]] <- highest_cumulative_series
+    }
+  }
+  
+  # Compute and print the total execution time of part 2
+  timer_end_2 <- Sys.time()
+  timer_2 <- as.numeric(timer_end_2 - timer_start_2, units = "secs")
+  print(paste("Execution time for PART 2: ", round(timer_2, 2), "seconds"))
+  
+  # Start timer for performance tracking of part 3
+  timer_start_3 <- Sys.time()
+  
+  # Select the optimal strategy as the one with the highest minimum cumulative return that didn't fall below the threshold
+  optimal_strategy <- df_above_threshold[which.max(df_above_threshold$LowestCumulativeReturn), "Strategy"]
+  
+  # Prepare data for plotting lowest cumulative returns for each strategy, categorizing them as above_threshold or excluded
+  plot_lowest_cum_returns_data <- do.call(rbind, lapply(names(lowest_series), function(name) {
+    group <- ifelse(name %in% df_above_threshold$Strategy, "above_threshold", "excluded")
+    data.frame(Year = 1:length(lowest_series[[name]])/252, Return = lowest_series[[name]], Strategy = name, Group = group, stringsAsFactors = FALSE)
+  }))
+  
+  # Assign colors for the plot: 'darkgreen' for strategies above threshold and 'gray90' for excluded strategies
+  color_mapping <- setNames(ifelse(unique(plot_lowest_cum_returns_data$Strategy) %in% df_above_threshold$Strategy, "darkgreen", "gray90"), unique(plot_lowest_cum_returns_data$Strategy))
+  
+  # Rearrange the order of the 'Group' factor to ensure 'above_threshold' group is plotted last (and therefore on top)
+  plot_lowest_cum_returns_data$Group <- factor(plot_lowest_cum_returns_data$Group, levels = c("excluded", "above_threshold"))
+  
+  # Generate a plot illustrating the evolution of the lowest cumulative return series for each investment strategy 
+  # Strategies are color-coded based on group - 'above_threshold' and 'excluded'
+  plot_lowest_cum_returns <- 
+    ggplot(plot_lowest_cum_returns_data, aes(x = Year, y = Return, color = Strategy, group = Strategy)) +
+    geom_line(data = subset(plot_lowest_cum_returns_data, Group == "excluded")) +
+    geom_line(data = subset(plot_lowest_cum_returns_data, Group == "above_threshold")) +
+    scale_color_manual(values = color_mapping) +
+    geom_hline(yintercept = minimum_allowable_percentage, linetype = "dashed", color = "red") +
+    labs(title = "Lowest cumulative return series, for each candidate investment strategy", x = "Years invested", y = "Cumulative return") +
+    theme_minimal() +
+    theme(legend.position="none") +
+    scale_y_continuous(limits = c(0, NA))
+  
+  # Compute and print the total execution time of part 3
+  timer_end_3 <- Sys.time()
+  timer_3 <- as.numeric(timer_end_3 - timer_start_3, units = "secs")
+  print(paste("Execution time for PART 3: ", round(timer_3, 2), "seconds"))
+  
+  # Start timer for performance tracking of part 4
+  timer_start_4 <- Sys.time()
+  
+  # Extract plot data for the optimal strategy
+  plot_optimal_strategy_data <- ggplot_build(plot_list_different_periods_within_strategies[[optimal_strategy]])$data[[1]]
+  
+  # Generate a plot that visualizes worst-case, best-case, and other return series for the optimal strategy
+  plot_optimal_strategy <- 
+    ggplot() +
+    geom_line(data = plot_optimal_strategy_data, aes(x = x, y = y, color = colour), alpha = 0.2) +
+    geom_line(data = data.frame(Year = 1:length(lowest_series[[optimal_strategy]])/252, Return = lowest_series[[optimal_strategy]]), aes(x = Year, y = Return), color = "red") +
+    geom_line(data = data.frame(Year = 1:length(highest_series[[optimal_strategy]])/252, Return = highest_series[[optimal_strategy]]), aes(x = Year, y = Return), color = "green") +
+    geom_hline(yintercept = minimum_allowable_percentage, linetype = "dashed", color = "red") +
+    labs(title = paste("Worst-case, best-case and other historic return series for your optimal strategy:", optimal_strategy), x = "Years invested", y = "Cumulative return") +
+    theme_minimal() +
+    theme(legend.position="none") +
+    scale_y_continuous(limits = c(0, NA))
+  
+  # Compute and print the total execution time of part 4
+  timer_end_4 <- Sys.time()
+  timer_4 <- as.numeric(timer_end_4 - timer_start_4, units = "secs")
+  print(paste("Execution time for PART 4: ", round(timer_4, 2), "seconds"))
+  
+  # Compute and print the total execution time of TOTAL FUNCTION
+  total_function_end_0 <- Sys.time()
+  total_function_time_0 <- as.numeric(total_function_end_0 - total_function_start_0, units = "secs")
+  print(paste("Execution time for TOTAL FUNCTION: ", round(total_function_time_0, 2), "seconds"))
+  
+  # Return the plots, optimal strategy, and data frames of results
+  return(list(plot_lowest_cum_returns, optimal_strategy, plot_optimal_strategy, df_above_threshold, df_refused, plot_list_different_periods_within_strategies, total_function_time_0))
 }
-
-

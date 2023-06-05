@@ -421,15 +421,14 @@ print(paste("Execution time for TOTAL FUNCTION: ", round(your_total_function_tim
 your_time_horizon_years <- seq(4, 12, 4) # shorter runtime than e.g., seq(2, 12, 2)
 your_minimum_allowable_percentage <- seq(0.60, 0.80, 0.20) # shorter runtime than e.g., seq(0.50, 0.90, 0.10)
 
-# Call the function compare_results_v1 with specified input parameters
+# Call the function compare_results with specified input parameters
 # Remark that it returns 2 objects: list(df_comparison, results_compared)
-your_results_v1 <- compare_results_v1(df_return_series = index_daily_returns_CHF, 
-                                      time_horizon_years = your_time_horizon_years, 
-                                      minimum_allowable_percentage = your_minimum_allowable_percentage)
-
+your_results_v1 <- compare_results(df_return_series = index_daily_returns_CHF, 
+                                   time_horizon_years = your_time_horizon_years, 
+                                   minimum_allowable_percentage = your_minimum_allowable_percentage,
+                                   optimization_function = determine_optimal_strategy_v1)
 df_comparison_v1 <- your_results_v1[[1]]
 results_compared_v1 <- your_results_v1[[2]]
-
 
 # Compare optimal strategies and total function times for different combinations of years and minimum values
 print(df_comparison_v1)
@@ -487,9 +486,47 @@ grid.arrange(
 # Print the total execution time of the function 
 print(paste("Execution time for TOTAL FUNCTION: ", round(result_v1$TotalFunctionTime, 2), "seconds"))
 
+
 # ---------------------------------------------------------------------------- #
 
-# Call the function determine_optimal_strategy_v2 with the specified input parameters
+
+# Function "determine_optimal_strategy_v2" aims to improve upon the performance of "determine_optimal_strategy_v1". 
+# Here are some potential improvements that we seek to implement sequentially:
+# 1. Profiling 
+# 2. Vectorized operations (and family functions?) instead of loops
+# 3. Memory pre-allocation 
+# 4. Parallel computation 
+# 5. Reduce number of operations 
+# 6. Memory efficiency (Use more efficient data structures) 
+# 7. Use optimized libraries 
+# 8. Memoization/Caching
+# 9. External computation
+
+# 1. Profiling:
+
+# Install profvis if not already installed
+if (!"profvis" %in% installed.packages()) {
+  install.packages("profvis")
+}
+# Load the profvis library
+library(profvis)
+
+# Now we can run our function inside the profvis function to generate a profile
+profvis({
+  determine_optimal_strategy_v1_timers(df_return_series = index_daily_returns_CHF, 
+                                       time_horizon_years = 12, 
+                                       minimum_allowable_percentage = 0.80)
+})
+
+# Run our function inside the profvis function to generate a profile, this time on a larger dataset
+profvis({
+  determine_optimal_strategy_v1(df_return_series = strategies_max_2_comb_daily_rebal, 
+                                time_horizon_years = 5, 
+                                minimum_allowable_percentage = 0.75)
+})
+
+
+# 2. Vectorized operations (and family functions?) instead of loops
 
 
 
@@ -502,6 +539,66 @@ print(paste("Execution time for TOTAL FUNCTION: ", round(result_v1$TotalFunction
 
 
 
+#### CURRENT WORK ####
+
+# Call the function determine_optimal_strategy_v2 with specified input parameters
+your_candidate_strategies_results_v2 <- determine_optimal_strategy_v2(df_return_series = index_daily_returns_CHF, 
+                                                                      time_horizon_years = 12, 
+                                                                      minimum_allowable_percentage = 0.80)
+
+# Extract the results from the function output into individual variables
+your_plot_lowest_returns_for_each_strategy_v2 <- your_candidate_strategies_results_v2[[1]]
+your_optimal_strategy_v2 <- your_candidate_strategies_results_v2[[2]]
+your_plot_optimal_strategy_v2 <- your_candidate_strategies_results_v2[[3]]
+your_strategies_above_threshold_v2 <- your_candidate_strategies_results_v2[[4]]
+your_strategies_below_threshold_v2 <- your_candidate_strategies_results_v2[[5]]
+your_plots_for_each_strategy_v2 <- your_candidate_strategies_results_v2[[6]]
+your_total_function_time_v2 <- your_candidate_strategies_results_v2[[7]]
+
+# your_plot_lowest_returns_for_each_strategy_v2
+# Plot the intermediate evolution of the lowest cumulative return series for each investment strategy (different colors for non-refused "group 1 strategies", and refused "group 2 strategies")
+print(paste("Plot of the intermediate evolution of the lowest cumulative return series for each investment strategy: (see plot)"))
+print(your_plot_lowest_returns_for_each_strategy_v2)
+
+# your_optimal_strategy_v2
+# Print the optimal strategy (the one strategy that delivers the best "lowest cumulative return" out of all strategies that always stayed above the threshold)
+print(paste("The optimal strategy (delivers the best 'lowest cumulative return' out of all strategies that always stayed above the threshold):"))
+print(your_optimal_strategy_v2)
+
+# plot_optimal_strategy_v2
+# Plot the optimal strategy's worst-case, best-case and other cumulative return series 
+print(paste("the optimal strategy's worst-case, best-case and other cumulative return series: (see plot)"))
+print(your_plot_optimal_strategy_v2)
+
+# your_strategies_above_threshold_v2
+# Print strategies that stayed above the threshold
+print(paste("Strategies that stayed above the threshold:", nrow(your_strategies_above_threshold_v2)))
+print(your_strategies_above_threshold_v2)
+
+# your_strategies_below_threshold_v2
+# Print strategies that are refused for having decreased below the threshold
+print(paste("Refused strategies (decreased below the threshold):", nrow(your_strategies_below_threshold_v2)))
+print(your_strategies_below_threshold_v2)
+
+# your_plots_for_each_strategy_v2
+# (1) To access a specific plot from the plot list your_plots_for_each_strategy, you would index it using the strategy name as follows:
+# In the place of "Strategy Name", use the exact name of the strategy you're interested in, like "US", "Europe", "World", etc.
+specific_plot_v2 = your_plots_for_each_strategy_v2[["US"]]
+print(specific_plot_v2)
+
+# (2) If you would like to display multiple plots together, you can use the gridExtra package. 
+# You need to specify the plots you want to display as follows:
+grid.arrange(
+  your_plots_for_each_strategy_v2[[your_optimal_strategy_v2]],
+  your_plots_for_each_strategy_v2[["Europe"]],
+  ncol = 1  # Or any other number of columns you want
+)
+# Notice that, for a given investment strategy, the algorithm analyzes all relevant time periods. 
+# We display only a subset of this, for illustration purposes.
+
+# your_total_function_time
+# Print the total execution time of the function 
+print(paste("Execution time for TOTAL FUNCTION: ", round(your_total_function_time_v2, 2), "seconds"))
 
 
 
@@ -509,6 +606,41 @@ print(paste("Execution time for TOTAL FUNCTION: ", round(result_v1$TotalFunction
 
 
 
+
+
+
+
+
+# ---------------------------------------------------------------------------- #
+
+# Compare the performance of function determine_optimal_strategy_v1 with that of determine_optimal_strategy_v2 
+
+# Define the range of years and minimum allowable percentage
+your_time_horizon_years <- seq(4, 12, 8) 
+your_minimum_allowable_percentage <- seq(0.50, 0.90, 0.40) 
+
+# Call the function compare_results with specified input parameters, running determine_optimal_strategy_v1
+# Remark that it returns 2 objects: list(df_comparison, results_compared)
+your_results_v1 <- compare_results(df_return_series = index_daily_returns_CHF, 
+                                   time_horizon_years = your_time_horizon_years, 
+                                   minimum_allowable_percentage = your_minimum_allowable_percentage,
+                                   optimization_function = determine_optimal_strategy_v1)
+df_comparison_v1 <- your_results_v1[[1]]
+results_compared_v1 <- your_results_v1[[2]]
+
+# Call the function compare_results with specified input parameters, running determine_optimal_strategy_v2
+# Remark that it returns 2 objects: list(df_comparison, results_compared)
+
+your_results_v2 <- compare_results(df_return_series = index_daily_returns_CHF, 
+                                   time_horizon_years = your_time_horizon_years, 
+                                   minimum_allowable_percentage = your_minimum_allowable_percentage,
+                                   optimization_function = determine_optimal_strategy_v2)
+df_comparison_v2 <- your_results_v1[[1]]
+results_compared_v2 <- your_results_v1[[2]]
+
+# Compare optimal strategies and total function times between determine_optimal_strategy_v1 and determine_optimal_strategy_v2
+print(df_comparison_v1)
+print(df_comparison_v2)
 
 
 
