@@ -440,7 +440,69 @@ determine_optimal_strategy_v1 <- function(df_return_series, time_horizon_years, 
   return(list(plot_lowest_cum_returns, optimal_strategy, plot_optimal_strategy, df_above_threshold, df_refused, plot_list_different_periods_within_strategies, total_function_time))
 }
 
-
+# Define a function that compares different strategies for various time horizons and minimum allowable percentages
+compare_results_v1 <- function(df_return_series, time_horizon_years, minimum_allowable_percentage) {
+  # Initialize an empty list to store the comparison results
+  results_compared <- list()
+  
+  # Compare different strategies for various time horizons and minimum allowable percentages
+  for (years in time_horizon_years) {
+    for (minimum_value in minimum_allowable_percentage) {
+      # Call the function determine_optimal_strategy_v1 with the specified input parameters
+      results_candidate_strategies <- determine_optimal_strategy_v1(df_return_series = index_daily_returns_CHF, 
+                                                                    time_horizon_years = years, 
+                                                                    minimum_allowable_percentage = minimum_value)
+      
+      # Extract the results from the function output into individual variables
+      your_plot_lowest_returns_for_each_strategy <- results_candidate_strategies[[1]]
+      your_optimal_strategy <- results_candidate_strategies[[2]]
+      your_plot_optimal_strategy <- results_candidate_strategies[[3]]
+      your_strategies_above_threshold <- results_candidate_strategies[[4]]
+      your_strategies_below_threshold <- results_candidate_strategies[[5]]
+      your_plots_for_each_strategy <- results_candidate_strategies[[6]]
+      your_total_function_time <- results_candidate_strategies[[7]]
+      
+      # Create a new element in the results_compared list for the current combination of years and minimum_value
+      results_compared[[paste0("years_", years, "_min_", minimum_value)]] <- list(
+        PlotLowestReturns = your_plot_lowest_returns_for_each_strategy,
+        OptimalStrategy = your_optimal_strategy,
+        PlotOptimalStrategy = your_plot_optimal_strategy,
+        StrategiesAboveThreshold = your_strategies_above_threshold,
+        StrategiesBelowThreshold = your_strategies_below_threshold,
+        PlotsForEachStrategy = your_plots_for_each_strategy,
+        TotalFunctionTime = your_total_function_time
+      )
+    }
+  }
+  
+  # Initialize an empty data frame to compare optimal strategies and total function times for different combinations of years and minimum values
+  df_comparison <- data.frame()
+  
+  # Loop over the results_compared list
+  for(i in 1:length(results_compared)) {
+    # Extract the name (which includes the years and minimum_value)
+    name <- names(results_compared[i])
+    # Extract the optimal strategy and total function time
+    optimal_strategy <- results_compared[[i]]$OptimalStrategy
+    total_function_time <- results_compared[[i]]$TotalFunctionTime
+    
+    # Extract the years and minimum value from the name
+    years_min_val <- strsplit(name, "_")
+    years <- as.numeric(years_min_val[[1]][2])
+    min_val <- as.numeric(years_min_val[[1]][4])
+    
+    # Append the results to the comparison data frame
+    df_comparison <- rbind(df_comparison,
+                           data.frame(
+                             Years = years,
+                             MinVal = min_val,
+                             OptimalStrategy = optimal_strategy,
+                             TotalFunctionTime = total_function_time
+                              ))
+  }
+  
+  return(list(df_comparison, results_compared))
+}
 
 
 
