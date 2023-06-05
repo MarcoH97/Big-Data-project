@@ -448,3 +448,14 @@ determine_optimal_strategy_v1 <- function(df_return_series, time_horizon_years, 
 
 
 
+
+determine_optimal_strategy_v2 <- function() {
+  
+  
+  
+  
+  
+  return()
+}
+
+
