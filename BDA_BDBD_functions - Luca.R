@@ -440,7 +440,19 @@ determine_optimal_strategy_v1 <- function(df_return_series, time_horizon_years, 
   return(list(plot_lowest_cum_returns, optimal_strategy, plot_optimal_strategy, df_above_threshold, df_refused, plot_list_different_periods_within_strategies, total_function_time))
 }
 
-# Define a function that compares different strategies for various time horizons and minimum allowable percentages
+
+#' An auxiliary function that loops over various scenarios for the determine_optimal_strategy_v1 function.
+#' 
+#' This function performs a comprehensive sweep of the determine_optimal_strategy_v1 function over different time horizons 
+#' and minimum allowable cumulative returns. This allows us to see how the optimal strategy changes with these parameters.
+#' 
+#' @param df_return_series A data frame containing the return series of different strategies.
+#' @param time_horizon_years An array containing various time horizons in years to be tested.
+#' @param minimum_allowable_percentage An array containing various minimum allowable cumulative return percentages to be tested.
+#' 
+#' @return A list containing the following elements:
+#' - df_comparison: a data frame containing the optimal strategies and calculation times for different combinations of years and minimum values.
+#' - results_compared: a list storing more detailed information from each run, including plots and strategies that are above and below the specified threshold.
 compare_results_v1 <- function(df_return_series, time_horizon_years, minimum_allowable_percentage) {
   # Initialize an empty list to store the comparison results
   results_compared <- list()
@@ -501,6 +513,10 @@ compare_results_v1 <- function(df_return_series, time_horizon_years, minimum_all
                               ))
   }
   
+  # The output of this function is a list containing the data frame for easy comparison of optimal strategies and computation times (df_comparison) 
+  # as well as the list of results from each combination of input parameters (results_compared). 
+  # The latter includes more detailed information from each run, 
+  # such as plots and strategies that are above and below the specified threshold.
   return(list(df_comparison, results_compared))
 }
 
