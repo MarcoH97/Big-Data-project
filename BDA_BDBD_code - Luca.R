@@ -348,6 +348,11 @@ library(gridExtra)
 # Call the function determine_optimal_strategy_v1 with the specified input parameters
 # Remark that it returns 7 objects: list(plot_lowest_cum_returns, optimal_strategy, plot_optimal_strategy, df_above_threshold, df_refused, plot_list_different_periods_within_strategies, total_function_time)
 
+# Call the function determine_optimal_strategy_v1 with specified input parameters
+your_candidate_strategies_results_v1 <- determine_optimal_strategy_v1(df_return_series = strategies_max_2_comb_daily_rebal, 
+                                                                      time_horizon_years = 10, 
+                                                                      minimum_allowable_percentage = 0.85)
+
 # Extract the results from the function output into individual variables
 your_plot_lowest_returns_for_each_strategy <- your_candidate_strategies_results_v1[[1]]
 your_optimal_strategy <- your_candidate_strategies_results_v1[[2]]
@@ -355,6 +360,7 @@ your_plot_optimal_strategy <- your_candidate_strategies_results_v1[[3]]
 your_strategies_above_threshold <- your_candidate_strategies_results_v1[[4]]
 your_strategies_below_threshold <- your_candidate_strategies_results_v1[[5]]
 your_plots_for_each_strategy <- your_candidate_strategies_results_v1[[6]]
+your_total_function_time <- your_candidate_strategies_results_v1[[7]]
 
 # your_plot_lowest_returns_for_each_strategy
 # Plot the intermediate evolution of the lowest cumulative return series for each investment strategy (different colors for non-refused "group 1 strategies", and refused "group 2 strategies")
@@ -395,15 +401,21 @@ grid.arrange(
 # Notice that, for a given investment strategy, the algorithm analyzes all relevant time periods. 
 # We display only a subset of this, for illustration purposes.
 
+# your_total_function_time
+# Print the total execution time of the function 
+print(paste("Execution time for TOTAL FUNCTION: ", your_total_function_time, "seconds"))
+
 
 # ---------------------------------------------------------------------------- #
 
 # Let's again call the function determine_optimal_strategy_v1, but compare outcomes and processing times 
 # between different strategies, for various time horizons and minimum allowable percentages...
+# Remark that the strong increase in computational time at a certain point could be a consequence of overusing the processing power, 
+# rather than from the algorithmic logic itself.
 
 # Define the range of years and minimum allowable percentage to compare different strategies over different time horizons and thresholds
-your_time_horizon_years <- seq(8, 12, 4)
-your_minimum_allowable_percentage <- seq(0.50, 0.75, 0.25)
+your_time_horizon_years <- seq(2, 12, 2)
+your_minimum_allowable_percentage <- seq(0.50, 0.90, 0.00)
 
 # Initialize an empty list to store the comparison results
 compare_results_v1 <- list()
@@ -455,7 +467,7 @@ for(i in 1:length(compare_results_v1)) {
   min_val <- as.numeric(years_min_val[[1]][4])
   
   # Append the results to the comparison data frame
-  comparison_df <- rbind(comparison_df, 
+  comparison_df_v1 <- rbind(comparison_df_v1, 
                          data.frame(
                            Years = years,
                            MinVal = min_val,
@@ -465,13 +477,17 @@ for(i in 1:length(compare_results_v1)) {
 }
 
 # Compare optimal strategies and total function times for different combinations of years and minimum values
-print(comparison_df)
+print(comparison_df_v1)
+# Notice that optimizing for longer time horizons seems to cause longer computing times.
+# Notice that optimizing for different minimum portfolio values seems to be uncorrelated with computing times.
+
 
 # ---------------------------------------------------------------------------- #
 
-# Access the results for a specific combination of years and minimum_value (e.g.,: 8 years; 0.50 minimum_value)
+# Access the results for a specific combination of years and minimum_value 
+# (e.g.,: 8 years; 0.50 minimum_value)
 years <- 8
-minimum_value <- 0.50
+minimum_value <- 0.60
 result <- compare_results_v1[[paste0("years_", years, "_min_", minimum_value)]]
 
 # Extract and display the values from the result
