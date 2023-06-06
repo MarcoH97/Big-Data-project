@@ -1,7 +1,3 @@
-
-
-
-
 # Import packages
 library(dplyr)
 library(zoo)
@@ -285,7 +281,7 @@ plot_mean_variance_graph <- function(df_return_series) {
 #' The function implements two main computations:
 #' 1. For each strategy, it evaluates all possible periods within the specified time horizon, and keeps track of the lowest and highest cumulative return.
 #' 2. It discards strategies that at any point drop below the minimum acceptable cumulative return, and it identifies the optimal strategy as the one with the highest minimum cumulative return.
-#' The function also generates several plots to visualize the the different historic return series for each strategy and the evolution of the lowest cumulative return.
+#' The function also generates several plots to visualize the different historic return series for each strategy and the evolution of the lowest cumulative return.
 #' 
 #' @param df_return_series A data frame containing the return series of different strategies.
 #' @param time_horizon_years The time horizon in years.
@@ -339,7 +335,7 @@ determine_optimal_strategy_v1 <- function(df_return_series, time_horizon_years, 
       cum_returns_time_period <- cumprod(1 + df_return_series[i:(i + time_horizon_days - 1), col])
       
       # Compute series to plot for every year (for visualization purposes)
-      if(i %% 252 == 0) {
+      if((i-1) %% 252 == 0) {
         df <- data.frame(Year = 1:length(cum_returns_time_period)/252, 
                          CumReturns = cum_returns_time_period,
                          Series_ID = paste("Series", i)) # Identifier for each series
@@ -466,7 +462,7 @@ compare_results <- function(df_return_series, time_horizon_years, minimum_allowa
   for (years in time_horizon_years) {
     for (minimum_value in minimum_allowable_percentage) {
       # Call the function determine_optimal_strategy_v1 with the specified input parameters
-      results_candidate_strategies <- optimization_function(df_return_series = index_daily_returns_CHF, 
+      results_candidate_strategies <- optimization_function(df_return_series = df_return_series, 
                                                                     time_horizon_years = years, 
                                                                     minimum_allowable_percentage = minimum_value)
       
@@ -526,13 +522,6 @@ compare_results <- function(df_return_series, time_horizon_years, minimum_allowa
 }
 
 
-
-
-
-
-
-
-
 # Define a function that determines the optimal investment strategy based on historical data and includes various timers
 determine_optimal_strategy_v1_timers <- function(df_return_series, time_horizon_years, minimum_allowable_percentage) {
   # Start timer for performance tracking of TOTAL FUNCTION
@@ -588,7 +577,7 @@ determine_optimal_strategy_v1_timers <- function(df_return_series, time_horizon_
       cum_returns_time_period <- cumprod(1 + df_return_series[i:(i + time_horizon_days - 1), col])
       
       # Compute series to plot for every year (for visualization purposes)
-      if(i %% 252 == 0) {
+      if((i-1) %% 252 == 0) {
         df <- data.frame(Year = 1:length(cum_returns_time_period)/252, 
                          CumReturns = cum_returns_time_period,
                          Series_ID = paste("Series", i)) # Identifier for each series
@@ -718,3 +707,436 @@ determine_optimal_strategy_v1_timers <- function(df_return_series, time_horizon_
   # Return the plots, optimal strategy, and data frames of results
   return(list(plot_lowest_cum_returns, optimal_strategy, plot_optimal_strategy, df_above_threshold, df_refused, plot_list_different_periods_within_strategies, total_function_time_0))
 }
+
+
+
+
+# Define a function that determines the optimal investment strategy based on historical data and includes various timers
+determine_optimal_strategy_vectorization_timers <- function(df_return_series, time_horizon_years, minimum_allowable_percentage) {
+  # Start timer for performance tracking of TOTAL FUNCTION
+  total_function_start_0 <- Sys.time()
+  
+  # Start timer for performance tracking of part 1
+  timer_start_1 <- Sys.time()
+  
+  # Initialize constants and variables
+  days_per_year <- 252  
+  time_horizon_days <- time_horizon_years * days_per_year
+  
+  # Initialize data frames to store results
+  df_above_threshold <- data.frame(Strategy = character(), LowestCumulativeReturn = numeric())
+  df_refused <- data.frame(Strategy = character(), LowestCumulativeReturn = numeric())
+  
+  # Initialize lists to store the lowest and highest return series for each strategy
+  lowest_series <- list()
+  highest_series <- list()
+  
+  # Initialize a list to store return series of the optimal strategy
+  optimal_strategy_series <- list()
+  
+  # Initialize a list to store ggplot objects for each strategy.
+  # Each ggplot object represents cumulative returns for different starting dates for a particular strategy.
+  plot_list_different_periods_within_strategies <- list()
+  
+  # Compute and print the total execution time of part 1
+  timer_end_1 <- Sys.time()
+  timer_1 <- as.numeric(timer_end_1 - timer_start_1, units = "secs")
+  print(paste("Execution time for PART 1: ", round(timer_1, 2), "seconds"))
+  
+  # Start timer for performance tracking of part 2
+  timer_start_2 <- Sys.time()
+  
+  # Main loop over each strategy
+  for (col in names(df_return_series)[-1]) {
+    
+    # Initialization of variables for current strategy
+    lowest_cumulative_return <- Inf
+    highest_cumulative_return <- -Inf 
+    lowest_cumulative_series <- NULL
+    highest_cumulative_series <- NULL 
+    exclude <- FALSE
+    df_series_to_plot <- data.frame()
+    
+    # Start timer for performance tracking of part 5
+    timer_start_5 <- Sys.time()
+    
+    # Instead of looping over all possible starting times for the specified time horizon,
+    # calculate all cumulative returns at once
+    cum_returns_all_time_periods <- lapply(1:(nrow(df_return_series) - time_horizon_days + 1), function(i) {
+      cumprod(1 + df_return_series[i:(i + time_horizon_days - 1), col])
+    })
+    
+    # Get series to plot for every year (for visualization purposes)
+    df_series_to_plot <- do.call(rbind, lapply(1:length(cum_returns_all_time_periods), function(i) {
+      if((i-1) %% 252 == 0) {
+        data.frame(Year = 1:length(cum_returns_all_time_periods[[i]])/252, 
+                   CumReturns = cum_returns_all_time_periods[[i]],
+                   Series_ID = paste("Series", i)) # Identifier for each series
+      }
+    }))
+    
+    # Check if the minimum cumulative return is below the threshold and set the flag to exclude the strategy if so
+    exclude <- any(sapply(cum_returns_all_time_periods, min) < minimum_allowable_percentage)
+    
+    # Find the lowest and highest cumulative return for the current strategy
+    lowest_cumulative_return <- min(sapply(cum_returns_all_time_periods, function(x) tail(x, n=1)))
+    highest_cumulative_return <- max(sapply(cum_returns_all_time_periods, function(x) tail(x, n=1)))
+    
+    lowest_cumulative_series <- cum_returns_all_time_periods[[which.min(sapply(cum_returns_all_time_periods, function(x) tail(x, n=1)))]]
+    highest_cumulative_series <- cum_returns_all_time_periods[[which.max(sapply(cum_returns_all_time_periods, function(x) tail(x, n=1)))]]
+    
+    # Compute and print the total execution time of part 5
+    timer_end_5 <- Sys.time()
+    timer_5 <- as.numeric(timer_end_5 - timer_start_5, units = "secs")
+    print(paste("Execution time for PART 5: ", round(timer_5, 2), "seconds"))
+    
+    # Generate plot displaying all series of cumulative returns for the current investment strategy. 
+    # Each series represents a different start time within the time horizon.
+    plot_different_periods_within_strategy <- 
+      ggplot(df_series_to_plot, aes(x=Year, y=CumReturns, color=Series_ID)) +
+      geom_line() +
+      geom_hline(yintercept = minimum_allowable_percentage, linetype = "dashed", color = "red") +
+      labs(x = "Years invested", y = "Cumulative Return", title = paste("Cumulative returns for different starting dates (subset of actual analysis), for", col)) +
+      theme(legend.position="none") +
+      scale_y_continuous(limits = c(0, NA))
+    
+    # The resulting plot is added to the list `plot_list_different_periods_within_strategies` for later use.
+    plot_list_different_periods_within_strategies[[col]] <- plot_different_periods_within_strategy
+    
+    # If the strategy is marked for exclusion, add to df_refused, else add to df_above_threshold
+    if (exclude == TRUE) {
+      df_refused <- rbind(df_refused, data.frame(Strategy = col, LowestCumulativeReturn = lowest_cumulative_return, HighestCumulativeReturn = highest_cumulative_return))
+      lowest_series[[col]] <- lowest_cumulative_series
+      highest_series[[col]] <- highest_cumulative_series 
+    } else {
+      df_above_threshold <- rbind(df_above_threshold, data.frame(Strategy = col, LowestCumulativeReturn = lowest_cumulative_return, HighestCumulativeReturn = highest_cumulative_return))
+      lowest_series[[col]] <- lowest_cumulative_series
+      highest_series[[col]] <- highest_cumulative_series
+    }
+  }
+  
+  # Compute and print the total execution time of part 2
+  timer_end_2 <- Sys.time()
+  timer_2 <- as.numeric(timer_end_2 - timer_start_2, units = "secs")
+  print(paste("Execution time for PART 2: ", round(timer_2, 2), "seconds"))
+  
+  # Start timer for performance tracking of part 3
+  timer_start_3 <- Sys.time()
+  
+  # Select the optimal strategy as the one with the highest minimum cumulative return that didn't fall below the threshold
+  optimal_strategy <- df_above_threshold[which.max(df_above_threshold$LowestCumulativeReturn), "Strategy"]
+  
+  # Prepare data for plotting lowest cumulative returns for each strategy, categorizing them as above_threshold or excluded
+  plot_lowest_cum_returns_data <- do.call(rbind, lapply(names(lowest_series), function(name) {
+    group <- ifelse(name %in% df_above_threshold$Strategy, "above_threshold", "excluded")
+    data.frame(Year = 1:length(lowest_series[[name]])/252, Return = lowest_series[[name]], Strategy = name, Group = group, stringsAsFactors = FALSE)
+  }))
+  
+  # Assign colors for the plot: 'darkgreen' for strategies above threshold and 'gray90' for excluded strategies
+  color_mapping <- setNames(ifelse(unique(plot_lowest_cum_returns_data$Strategy) %in% df_above_threshold$Strategy, "darkgreen", "gray90"), unique(plot_lowest_cum_returns_data$Strategy))
+  
+  # Rearrange the order of the 'Group' factor to ensure 'above_threshold' group is plotted last (and therefore on top)
+  plot_lowest_cum_returns_data$Group <- factor(plot_lowest_cum_returns_data$Group, levels = c("excluded", "above_threshold"))
+  
+  # Generate a plot illustrating the evolution of the lowest cumulative return series for each investment strategy 
+  # Strategies are color-coded based on group - 'above_threshold' and 'excluded'
+  plot_lowest_cum_returns <- 
+    ggplot(plot_lowest_cum_returns_data, aes(x = Year, y = Return, color = Strategy, group = Strategy)) +
+    geom_line(data = subset(plot_lowest_cum_returns_data, Group == "excluded")) +
+    geom_line(data = subset(plot_lowest_cum_returns_data, Group == "above_threshold")) +
+    scale_color_manual(values = color_mapping) +
+    geom_hline(yintercept = minimum_allowable_percentage, linetype = "dashed", color = "red") +
+    labs(title = "Lowest cumulative return series, for each candidate investment strategy", x = "Years invested", y = "Cumulative return") +
+    theme_minimal() +
+    theme(legend.position="none") +
+    scale_y_continuous(limits = c(0, NA))
+  
+  # Compute and print the total execution time of part 3
+  timer_end_3 <- Sys.time()
+  timer_3 <- as.numeric(timer_end_3 - timer_start_3, units = "secs")
+  print(paste("Execution time for PART 3: ", round(timer_3, 2), "seconds"))
+  
+  # Start timer for performance tracking of part 4
+  timer_start_4 <- Sys.time()
+  
+  # Extract plot data for the optimal strategy
+  plot_optimal_strategy_data <- ggplot_build(plot_list_different_periods_within_strategies[[optimal_strategy]])$data[[1]]
+  
+  # Generate a plot that visualizes worst-case, best-case, and other return series for the optimal strategy
+  plot_optimal_strategy <- 
+    ggplot() +
+    geom_line(data = plot_optimal_strategy_data, aes(x = x, y = y, color = colour), alpha = 0.2) +
+    geom_line(data = data.frame(Year = 1:length(lowest_series[[optimal_strategy]])/252, Return = lowest_series[[optimal_strategy]]), aes(x = Year, y = Return), color = "red") +
+    geom_line(data = data.frame(Year = 1:length(highest_series[[optimal_strategy]])/252, Return = highest_series[[optimal_strategy]]), aes(x = Year, y = Return), color = "green") +
+    geom_hline(yintercept = minimum_allowable_percentage, linetype = "dashed", color = "red") +
+    labs(title = paste("Worst-case, best-case and other historic return series for your optimal strategy:", optimal_strategy), x = "Years invested", y = "Cumulative return") +
+    theme_minimal() +
+    theme(legend.position="none") +
+    scale_y_continuous(limits = c(0, NA))
+  
+  # Compute and print the total execution time of part 4
+  timer_end_4 <- Sys.time()
+  timer_4 <- as.numeric(timer_end_4 - timer_start_4, units = "secs")
+  print(paste("Execution time for PART 4: ", round(timer_4, 2), "seconds"))
+  
+  # Compute and print the total execution time of TOTAL FUNCTION
+  total_function_end_0 <- Sys.time()
+  total_function_time_0 <- as.numeric(total_function_end_0 - total_function_start_0, units = "secs")
+  print(paste("Execution time for TOTAL FUNCTION: ", round(total_function_time_0, 2), "seconds"))
+  
+  # Return the plots, optimal strategy, and data frames of results
+  return(list(plot_lowest_cum_returns, optimal_strategy, plot_optimal_strategy, df_above_threshold, df_refused, plot_list_different_periods_within_strategies, total_function_time_0))
+}
+
+
+#' A simplified function to determine the optimal investment strategy based on historical data.
+#' 
+#' This function takes into consideration all possible start times within a given time horizon and a minimum acceptable cumulative return.
+#' It performs the following main computations:
+#' 1. For each strategy, it evaluates all possible periods within the specified time horizon, and keeps track of the lowest and highest cumulative return.
+#' 2. It discards strategies that at any point drop below the minimum acceptable cumulative return, and it identifies the optimal strategy as the one with the highest minimum cumulative return.
+#' This function excludes generating plots to visualize the different historic return series for each strategy and the evolution of the lowest cumulative return.
+#' 
+#' @param df_return_series A data frame containing the return series of different strategies.
+#' @param time_horizon_years The time horizon in years.
+#' @param minimum_allowable_percentage The minimum allowable cumulative return percentage below which a strategy should be excluded.
+#' @param granularity The level of granularity (e.g., "daily", "weekly", "monthly", etc.) to use for skipping intervals in the analysis. Defaults to "daily".
+#' 
+#' @return A list containing the following elements:
+#' - optimal_strategy: the investment strategy that provides the highest minimum cumulative return over all possible periods within the time horizon and doesn't fall below the minimum allowable percentage return.
+#' - df_above_threshold: a data frame containing strategies that have not been excluded, their lowest and highest cumulative returns.
+#' - df_refused: a data frame containing excluded strategies.
+#' - total_function_time: the total execution time of the function, in seconds.
+determine_optimal_strategy_simplified <- function(df_return_series, time_horizon_years, 
+                                                  minimum_allowable_percentage, granularity = "daily") {
+  # Start timer for performance tracking
+  total_function_start <- Sys.time()
+  
+  # Set granularity level for skipping intervals in the analysis
+  granularity <- tolower(granularity)
+  skip <- switch(granularity,
+                 "daily" = 1,
+                 "weekly" = 5,
+                 "monthly" = 21,
+                 "quarterly" = 63,
+                 "bi-annually" = 126,
+                 "annually" = 252,
+                 stop("Invalid granularity"))
+
+  # Initialize constants and variables
+  days_per_year <- 252  
+  time_horizon_days <- time_horizon_years * days_per_year
+  
+  # Initialize data frames to store results
+  df_above_threshold <- data.frame(Strategy = character(), LowestCumulativeReturn = numeric())
+  df_refused <- data.frame(Strategy = character())
+  
+  # Initialize lists to store the lowest and highest return series for each strategy
+  lowest_series <- list()
+  highest_series <- list()
+  
+  # Main loop over each strategy
+  for (col in names(df_return_series)[-1]) {
+    
+    # Initialization of variables for current strategy
+    lowest_cumulative_return <- Inf
+    highest_cumulative_return <- -Inf 
+    lowest_cumulative_series <- NULL
+    highest_cumulative_series <- NULL 
+    exclude <- FALSE
+    
+    # Loop over all possible starting times for the specified time horizon
+    for (i in seq(1, (nrow(df_return_series) - time_horizon_days + 1), by = skip)) {
+      # Compute cumulative returns for the current time period
+      cum_returns_time_period <- cumprod(1 + df_return_series[i:(i + time_horizon_days - 1), col])
+      
+      # Check if the minimum cumulative return is below the threshold. 
+      # If so, exclude the strategy, add it to df_refused and break out of the current loop
+      if (any(cum_returns_time_period < minimum_allowable_percentage)) {
+        exclude <- TRUE
+        df_refused <- rbind(df_refused, data.frame(Strategy = col))
+        break
+      }
+      
+      # Keep track of the lowest cumulative return for the current strategy
+      if (cum_returns_time_period[length(cum_returns_time_period)] < lowest_cumulative_return) {
+        lowest_cumulative_return <- cum_returns_time_period[length(cum_returns_time_period)]
+        lowest_cumulative_series <- cum_returns_time_period
+      }
+      
+      # Keep track of the highest cumulative return for the current strategy
+      if (cum_returns_time_period[length(cum_returns_time_period)] > highest_cumulative_return) {
+        highest_cumulative_return <- cum_returns_time_period[length(cum_returns_time_period)]
+        highest_cumulative_series <- cum_returns_time_period
+      }
+    }
+
+    # If the strategy is not marked for exclusion add to df_above_threshold
+    if (exclude == FALSE) {
+      df_above_threshold <- rbind(df_above_threshold, data.frame(Strategy = col, LowestCumulativeReturn = lowest_cumulative_return, HighestCumulativeReturn = highest_cumulative_return))
+      lowest_series[[col]] <- lowest_cumulative_series
+      highest_series[[col]] <- highest_cumulative_series
+    }
+  }
+  
+  # Select the optimal strategy as the one with the highest minimum cumulative return that didn't fall below the threshold
+  optimal_strategy <- df_above_threshold[which.max(df_above_threshold$LowestCumulativeReturn), "Strategy"]
+  
+  # Compute and print the total execution time of the function
+  total_function_end <- Sys.time()
+  total_function_time <- as.numeric(total_function_end - total_function_start, units = "secs")
+  
+  # Return a list with the optimal strategy, two data frames for the strategies above threshold and refused, and the total execution time of the function
+  return(list(optimal_strategy, df_above_threshold, df_refused, total_function_time))
+}
+
+
+# An advanced version of the determine_optimal_strategy function.
+# This function iterates over different granularities and progressively refines the data to analyze based on the top X-percentile strategies at each level of granularity.
+# The function implements a modified version of the determine_optimal_strategy function at each granularity level.
+# At the end of the process, the remaining top strategies are returned with the results from the final granularity level.
+#
+# @param df_return_series A data frame containing the return series of different strategies.
+# @param time_horizon_years The time horizon in years.
+# @param minimum_allowable_percentage The minimum allowable cumulative return percentage below which a strategy should be excluded.
+# @param X_percentile The top X-percentile of strategies to keep for the next level of granularity. Defaults to 0.50.
+#
+# @return A list containing the results of the analysis on the final level of granularity and the total execution time.
+determine_optimal_strategy_advanced_A <- function(df_return_series, time_horizon_years, 
+                                                  minimum_allowable_percentage, X_percentile = 0.40) {
+  # Start timer for performance tracking
+  total_function_start <- Sys.time()
+  
+  # Define the granularities to be used in sequence
+  granularities <- c("annually", "bi-annually", "quarterly", "monthly", "weekly", "daily")
+  
+  # Initialize the data to the full dataset
+  data_to_analyze <- df_return_series
+  
+  for (granularity in granularities) {
+    # Determine the optimal strategies for the current level of granularity
+    results <- determine_optimal_strategy_simplified(data_to_analyze, time_horizon_years, 
+                                                     minimum_allowable_percentage, granularity)
+    
+    # Get the top X-percentile strategies
+    top_X_percentile <- quantile(results[[2]]$LowestCumulativeReturn, X_percentile)
+    
+    # Get the strategies whose LowestCumulativeReturn > top_40
+    top_strategies <- results[[2]]$Strategy[results[[2]]$LowestCumulativeReturn > top_X_percentile]
+    
+    # Filter the strategies for the next level of granularity
+    data_to_analyze <- data_to_analyze[ , c("Dates", top_strategies)]
+    print(paste("Current level of granularity:", granularity))
+    print("Top remaining strategies for further analysis:")
+    print(colnames(data_to_analyze[,-1]))
+    
+    # If less than 2 strategies remain, break the loop
+    if (ncol(data_to_analyze) <= 2) {
+      break
+    }
+  }
+  
+  # Compute and print the total execution time of the function
+  total_function_end <- Sys.time()
+  total_function_time <- as.numeric(total_function_end - total_function_start, units = "secs")
+  print(paste("Execution time for TOTAL FUNCTION: ", round(total_function_time, 2), "seconds"))
+  
+  
+  results[[4]] <- total_function_time
+  
+  # Return the results from the final granularity level
+  return(results)
+}
+
+
+# An advanced version of the determine_optimal_strategy function.
+# This function iterates over different granularities and progressively refines the data to analyze based on the top X-percentile strategies at each level of granularity.
+# If no strategy remains at a certain granularity level, the function rolls back to the previous granularity level and gets the "2nd_X_percentile" strategies to continue the process.
+# The function implements a modified version of the determine_optimal_strategy function at each granularity level.
+# At the end of the process, the remaining top strategies are returned with the results from the final granularity level.
+#
+# @param df_return_series A data frame containing the return series of different strategies.
+# @param time_horizon_years The time horizon in years.
+# @param minimum_allowable_percentage The minimum allowable cumulative return percentage below which a strategy should be excluded.
+# @param X_percentile The top X-percentile of strategies to keep for the next level of granularity. Defaults to 0.40.
+#
+# @return A list containing the results of the analysis on the final level of granularity and the total execution time.
+determine_optimal_strategy_advanced_B <- function(df_return_series, time_horizon_years, 
+                                                minimum_allowable_percentage, X_percentile = 0.40) {
+  # Start timer for performance tracking
+  total_function_start <- Sys.time()
+  
+  # Define the granularities to be used in sequence
+  granularities <- c("annually", "bi-annually", "quarterly", "monthly", "weekly", "daily")
+  
+  # Initialize the data to the full dataset
+  data_to_analyze <- df_return_series
+  
+  # Create a list to store the results for each granularity
+  results_list <- list()
+  
+  for (granularity in granularities) {
+    # Determine the optimal strategies for the current level of granularity
+    results <- determine_optimal_strategy_simplified(data_to_analyze, time_horizon_years, 
+                                                     minimum_allowable_percentage, granularity)
+    
+    # Save the results for this granularity level
+    results_list[[granularity]] <- results
+    
+    # Get the top X-percentile strategies
+    top_X_percentile <- quantile(results[[2]]$LowestCumulativeReturn, X_percentile)
+    
+    # Get the strategies whose LowestCumulativeReturn > top_X_percentile
+    top_strategies <- results[[2]]$Strategy[results[[2]]$LowestCumulativeReturn > top_X_percentile]
+    
+    # Filter the strategies for the next level of granularity
+    data_to_analyze <- data_to_analyze[ , c("Dates", top_strategies)]
+    print(paste("Current level of granularity:", granularity))
+    print("Top remaining strategies for further analysis:")
+    print(colnames(data_to_analyze[,-1]))
+    
+    # If no strategy remains, move back to the previous granularity level and get the "2nd_X_percentile" strategies
+    if (ncol(data_to_analyze) <= 1) {
+      # Get the index of the current granularity
+      current_index <- which(granularities == granularity)
+      
+      # If it's not the first granularity level, move back
+      if (current_index > 1) {
+        previous_results <- results_list[[granularities[current_index - 1]]]
+        
+        # Calculate the 2nd_X_percentile strategies from previous_results
+        second_X_percentile <- quantile(previous_results[[2]]$LowestCumulativeReturn, 2 * X_percentile)
+        top_strategies <- previous_results[[2]]$Strategy[previous_results[[2]]$LowestCumulativeReturn > second_X_percentile]
+        
+        # Filter the strategies again
+        data_to_analyze <- data_to_analyze[ , c("Dates", top_strategies)]
+      }
+    }
+    
+    # If less than 2 strategies remain, break the loop
+    if (ncol(data_to_analyze) <= 2) {
+      break
+    }
+  }
+  
+  # Compute and print the total execution time of the function
+  total_function_end <- Sys.time()
+  total_function_time <- as.numeric(total_function_end - total_function_start, units = "secs")
+  print(paste("Execution time for TOTAL FUNCTION: ", round(total_function_time, 2), "seconds"))
+  
+  results[[4]] <- total_function_time
+  
+  # Return the results from the final granularity level
+  return(results)
+}
+
+
+
+
+determine_optimal_strategy_v2 <- function(df_return_series, time_horizon_years, 
+                                          minimum_allowable_percentage, X_percentile = 0.50) {
+  return(...)
+}
+
+
+

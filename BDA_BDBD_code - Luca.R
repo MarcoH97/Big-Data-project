@@ -494,13 +494,18 @@ print(paste("Execution time for TOTAL FUNCTION: ", round(result_v1$TotalFunction
 # Here are some potential improvements that we seek to implement sequentially:
 # 1. Profiling 
 # 2. Vectorized operations (and family functions?) instead of loops
-# 3. Memory pre-allocation 
-# 4. Parallel computation 
-# 5. Reduce number of operations 
+# 3. Reduce number of operations 
+# 4. Memory pre-allocation 
+# 5. Parallel computation 
 # 6. Memory efficiency (Use more efficient data structures) 
 # 7. Use optimized libraries 
 # 8. Memoization/Caching
-# 9. External computation
+# 9. Machine learning techniques (possibly heuristics)
+# 10. External computation
+
+# 2. AGAIN Vectorized operations (and family functions?) instead of loops
+
+
 
 # 1. Profiling:
 
@@ -528,81 +533,207 @@ profvis({
 
 # 2. Vectorized operations (and family functions?) instead of loops
 
+# Define the range of years and minimum allowable percentage to compare different strategies over different time horizons and thresholds
+your_time_horizon_years <- seq(4, 12, 4)
+your_minimum_allowable_percentage <- seq(0.60, 0.80, 0.20)
+
+# Call the function compare_results with specified input parameters, for function determine_optimal_strategy_v1_timers
+your_results_v1_timers <- compare_results(df_return_series = index_daily_returns_CHF, 
+                                   time_horizon_years = your_time_horizon_years, 
+                                   minimum_allowable_percentage = your_minimum_allowable_percentage,
+                                   optimization_function = determine_optimal_strategy_v1_timers)
+df_comparison_v1_timers <- your_results_v1_timers[[1]]
+results_compared_v1_timers <- your_results_v1_timers[[2]]
+
+# Compare optimal strategies and total function times for function determine_optimal_strategy_v1_timers
+print(df_comparison_v1_timers)
+# RUN 1 (memory free)...
+# Years MinVal                      OptimalStrategy TotalFunctionTime
+# 1     4    0.6       Switzerland ST treasuries 1-3Y          5.329378
+# 2     4    0.8       Switzerland ST treasuries 1-3Y          4.892113
+# 3     8    0.6 EM IT treasuries (3-5Y, 5-7Y, 7-10Y)          6.269587
+# 4     8    0.8       Switzerland ST treasuries 1-3Y          5.713225
+# 5    12    0.6                EM LT treasuries 10Y+          9.074858
+# 6    12    0.8       Switzerland LT treasuries 10Y+          9.461457
+# RUN 3 (memory less free)...
+# Years MinVal                      OptimalStrategy TotalFunctionTime
+# 1     4    0.6       Switzerland ST treasuries 1-3Y          6.664254
+# 2     4    0.8       Switzerland ST treasuries 1-3Y          7.099568
+# 3     8    0.6 EM IT treasuries (3-5Y, 5-7Y, 7-10Y)          7.086873
+# 4     8    0.8       Switzerland ST treasuries 1-3Y          7.505601
+# 5    12    0.6                EM LT treasuries 10Y+         14.713905
+# 6    12    0.8       Switzerland LT treasuries 10Y+         13.476833
+
+
+# Call the function compare_results with specified input parameters, for function determine_optimal_strategy_vectorization_timers
+your_results_vectorization_timers <- compare_results(df_return_series = index_daily_returns_CHF, 
+                                          time_horizon_years = your_time_horizon_years, 
+                                          minimum_allowable_percentage = your_minimum_allowable_percentage,
+                                          optimization_function = determine_optimal_strategy_vectorization_timers)
+df_comparison_vectorization_timers <- your_results_vectorization_timers[[1]]
+results_compared_vectorization_timers <- your_results_vectorization_timers[[2]]
+
+# Compare optimal strategies and total function times for function determine_optimal_strategy_vectorization_timers
+print(df_comparison_vectorization_timers)
+# RUN 2 (memory less free)...
+# Years MinVal                      OptimalStrategy TotalFunctionTime
+# 1     4    0.6       Switzerland ST treasuries 1-3Y         10.876775
+# 2     4    0.8       Switzerland ST treasuries 1-3Y          9.719702
+# 3     8    0.6 EM IT treasuries (3-5Y, 5-7Y, 7-10Y)          9.054941
+# 4     8    0.8       Switzerland ST treasuries 1-3Y          9.180789
+# 5    12    0.6                EM LT treasuries 10Y+         10.770448
+# 6    12    0.8       Switzerland LT treasuries 10Y+         12.855706
+# RUN 4 (memory less free)...
+# Years MinVal                      OptimalStrategy TotalFunctionTime
+# 1     4    0.6       Switzerland ST treasuries 1-3Y         12.113778
+# 2     4    0.8       Switzerland ST treasuries 1-3Y         10.926505
+# 3     8    0.6 EM IT treasuries (3-5Y, 5-7Y, 7-10Y)          9.380281
+# 4     8    0.8       Switzerland ST treasuries 1-3Y          9.713642
+# 5    12    0.6                EM LT treasuries 10Y+         14.149580
+# 6    12    0.8       Switzerland LT treasuries 10Y+         16.598828
+
+# Let's compare the computation time for a larger dataset (strategies_max_2_comb_daily_rebal instead of index_daily_returns_CHF)
+# Define the time horizon and minimum allowable percentage 
+your_time_horizon_years <- seq(10, 10, 0) 
+your_minimum_allowable_percentage <- seq(0.75, 0.75, 0) 
+
+# Call the function compare_results with specified input parameters, for function determine_optimal_strategy_v1_timers
+your_results_v1_timers <- compare_results(df_return_series = strategies_max_2_comb_daily_rebal, 
+                                          time_horizon_years = your_time_horizon_years, 
+                                          minimum_allowable_percentage = your_minimum_allowable_percentage,
+                                          optimization_function = determine_optimal_strategy_v1_timers)
+df_comparison_v1_timers <- your_results_v1_timers[[1]]
+results_compared_v1_timers <- your_results_v1_timers[[2]]
+
+# Compare optimal strategies and total function times for function determine_optimal_strategy_v1_timers
+print(df_comparison_v1_timers)
+# RUN 1 (memory free)...
+# Years MinVal            OptimalStrategy TotalFunctionTime
+# 1    10   0.75 Switzerland | Gold bullion          80.59188
+
+
+# Call the function compare_results with specified input parameters, for function determine_optimal_strategy_vectorization_timers
+your_results_vectorization_timers <- compare_results(df_return_series = strategies_max_2_comb_daily_rebal, 
+                                                     time_horizon_years = your_time_horizon_years, 
+                                                     minimum_allowable_percentage = your_minimum_allowable_percentage,
+                                                     optimization_function = determine_optimal_strategy_vectorization_timers)
+df_comparison_vectorization_timers <- your_results_vectorization_timers[[1]]
+results_compared_vectorization_timers <- your_results_vectorization_timers[[2]]
+
+# Compare optimal strategies and total function times for function determine_optimal_strategy_vectorization_timers
+print(df_comparison_vectorization_timers)
+# Years MinVal            OptimalStrategy TotalFunctionTime
+# 1    10   0.75 Switzerland | Gold bullion          158.5932
+
+
+#' CONCLUSION for vectorization and family functions:
+#' Our trials with different vectorization algorithms and family functions led to even longer running times than for our initial (v1) function
+#' The increase in computation time is due to the nature of the operations performed and the data structure manipulations involved:
+#' (i) Use of rolling window calculations: 
+#' In your function, you're applying the zoo::rollapply function to each of your series. 
+#' This involves moving a window of time_horizon_days through the data and recalculating the product of the returns and finding the minimum in each window. 
+#' This operation is time consuming and complexity increases with increasing time_horizon_days.
+#' (ii) Looping through columns: 
+#' While lapply is generally faster than a traditional for loop in R, this speed benefit may not be evident 
+#' when the function applied to each element of the list (in this case, each column of your dataframe) involves intensive computation, 
+#' such as the rolling window operation you're performing.
+#' (iii) Data frame manipulation: 
+#' The repeated binding and data frame transformations (i.e., converting the list results into a data frame using do.call(rbind, ...)) 
+#' may also contribute to the increased computation time.
+
+#' To make the function faster, you might consider parallelizing the computations, optimizing the logic, 
+#' or using more efficient data structures or libraries designed for fast computations, such as data.table in R, if it is applicable to your use case.
+
+
+# 3. Reduce number of operations 
+
+#' Implementations to more find (or estimate) the optimal strategy from a set of possible strategies in a more computationally efficient manner:
+#' (a) in comparing the different time periods for a certain investment strategy, we might not have to compare between every possible starting date,
+#' but we could compare different starting dates that are e.g., 1 week, 1 month, 1 quarter, 0.5 year, 1 year apart...
+#' this would require respectively 5 / 21 / 63 / 126 / 252 times less computations.
+#' Depending on the volatility of the underlying data and the chosen strategy, this might be an acceptable compromise.
+#' (b) skip (i.e. break out of the loop for) an investment strategy if it can no longer be the optimal strategy, 
+#' when it has at least one relevant time period during which it drops below the minimum acceptable cumulative return
+#' (c) generate desired plots separately from the process of finding the optimal investment strategy
+#' ...
+#' 
+
+### Testing our simplified function to determine the optimal investment strategy based on historical data...
+
+# df_return_series <- index_daily_returns_CHF
+df_return_series <- strategies_max_2_comb_daily_rebal
+# df_return_series <- strategies_max_3_comb_daily_rebal
+# df_return_series <- strategies_max_4_comb_daily_rebal
+time_horizon_years <- 12
+minimum_allowable_percentage <- 0.75
+granularity = "annually"
+
+results_simplified_optimal_strategy <- determine_optimal_strategy_simplified(df_return_series, time_horizon_years, 
+                                                                             minimum_allowable_percentage, granularity)
+print(results_simplified_optimal_strategy[[1]])
+print(paste("Execution time for TOTAL FUNCTION: ", round(results_simplified_optimal_strategy[[4]], 2), "seconds"))
+head(results_simplified_optimal_strategy[[2]], 3)
+tail(results_simplified_optimal_strategy[[2]], 3)
+head(results_simplified_optimal_strategy[[3]], 3)
+tail(results_simplified_optimal_strategy[[3]], 3)
+
+
+### Testing our first advanced function (A) to determine the optimal investment strategy based on historical data...
+
+# df_return_series <- index_daily_returns_CHF
+# df_return_series <- strategies_max_2_comb_daily_rebal
+df_return_series <- strategies_max_3_comb_daily_rebal
+# df_return_series <- strategies_max_4_comb_daily_rebal
+time_horizon_years <- 12
+minimum_allowable_percentage <- 0.75
+
+results_advanced_optimal_strategy_A <- determine_optimal_strategy_advanced_A(df_return_series, time_horizon_years, 
+                                                                           minimum_allowable_percentage, X_percentile = 0.40)
+print(results_advanced_optimal_strategy_A[[1]])
+print(paste("Execution time for TOTAL FUNCTION: ", round(results_advanced_optimal_strategy_A[[4]], 2), "seconds"))
+head(results_advanced_optimal_strategy_A[[2]], 3)
+tail(results_advanced_optimal_strategy_A[[2]], 3)
+head(results_advanced_optimal_strategy_A[[3]], 3)
+tail(results_advanced_optimal_strategy_A[[3]], 3)
+
+### Testing our second advanced function (B) to determine the optimal investment strategy based on historical data...
+
+# df_return_series <- index_daily_returns_CHF
+df_return_series <- strategies_max_2_comb_daily_rebal
+# df_return_series <- strategies_max_3_comb_daily_rebal
+# df_return_series <- strategies_max_4_comb_daily_rebal
+time_horizon_years <- 12
+minimum_allowable_percentage <- 0.75
+
+results_advanced_optimal_strategy_B <- determine_optimal_strategy_advanced_B(df_return_series, time_horizon_years, 
+                                                                           minimum_allowable_percentage, X_percentile = 0.40)
+print(results_advanced_optimal_strategy_B[[1]])
+print(paste("Execution time for TOTAL FUNCTION: ", round(results_advanced_optimal_strategy_B[[4]], 2), "seconds"))
+head(results_advanced_optimal_strategy_B[[2]], 3)
+tail(results_advanced_optimal_strategy_B[[2]], 3)
+head(results_advanced_optimal_strategy_B[[3]], 3)
+tail(results_advanced_optimal_strategy_B[[3]], 3)
 
 
 
+### Other idea:
+# In advance, compute a dataset that contains all cumulative products for different possible time horizons (1, 2, ..., 20 years).
+# Depending on the user-specified time horizon and minimum allowable value, within the relevant subset of the data (i.e. the part that corresponds to the user-specified time horizon) we simply search for the one optimal strategy (the one column) that contains
+# (i) no cumulative products below the threshold
+# (ii) the highest minimum cumulative product, between all investment strategies.
 
+#' This is a good idea. However, keep in mind that this approach will require a significant amount of memory, 
+#' as you will be storing a large number of cumulative product series. 
+#' You will need to manage your memory resources wisely to ensure your system does not run out of memory.
 
+#' This approach makes sense and should significantly reduce the amount of computation needed to find the optimal strategy. 
+#' However, it will still be computationally intensive because you will need to search through a potentially large number of cumulative product series. 
+#' You could potentially speed this up using binary search or other optimized search algorithms.
 
-
-
-
-
-
-#### CURRENT WORK ####
-
-# Call the function determine_optimal_strategy_v2 with specified input parameters
-your_candidate_strategies_results_v2 <- determine_optimal_strategy_v2(df_return_series = index_daily_returns_CHF, 
-                                                                      time_horizon_years = 12, 
-                                                                      minimum_allowable_percentage = 0.80)
-
-# Extract the results from the function output into individual variables
-your_plot_lowest_returns_for_each_strategy_v2 <- your_candidate_strategies_results_v2[[1]]
-your_optimal_strategy_v2 <- your_candidate_strategies_results_v2[[2]]
-your_plot_optimal_strategy_v2 <- your_candidate_strategies_results_v2[[3]]
-your_strategies_above_threshold_v2 <- your_candidate_strategies_results_v2[[4]]
-your_strategies_below_threshold_v2 <- your_candidate_strategies_results_v2[[5]]
-your_plots_for_each_strategy_v2 <- your_candidate_strategies_results_v2[[6]]
-your_total_function_time_v2 <- your_candidate_strategies_results_v2[[7]]
-
-# your_plot_lowest_returns_for_each_strategy_v2
-# Plot the intermediate evolution of the lowest cumulative return series for each investment strategy (different colors for non-refused "group 1 strategies", and refused "group 2 strategies")
-print(paste("Plot of the intermediate evolution of the lowest cumulative return series for each investment strategy: (see plot)"))
-print(your_plot_lowest_returns_for_each_strategy_v2)
-
-# your_optimal_strategy_v2
-# Print the optimal strategy (the one strategy that delivers the best "lowest cumulative return" out of all strategies that always stayed above the threshold)
-print(paste("The optimal strategy (delivers the best 'lowest cumulative return' out of all strategies that always stayed above the threshold):"))
-print(your_optimal_strategy_v2)
-
-# plot_optimal_strategy_v2
-# Plot the optimal strategy's worst-case, best-case and other cumulative return series 
-print(paste("the optimal strategy's worst-case, best-case and other cumulative return series: (see plot)"))
-print(your_plot_optimal_strategy_v2)
-
-# your_strategies_above_threshold_v2
-# Print strategies that stayed above the threshold
-print(paste("Strategies that stayed above the threshold:", nrow(your_strategies_above_threshold_v2)))
-print(your_strategies_above_threshold_v2)
-
-# your_strategies_below_threshold_v2
-# Print strategies that are refused for having decreased below the threshold
-print(paste("Refused strategies (decreased below the threshold):", nrow(your_strategies_below_threshold_v2)))
-print(your_strategies_below_threshold_v2)
-
-# your_plots_for_each_strategy_v2
-# (1) To access a specific plot from the plot list your_plots_for_each_strategy, you would index it using the strategy name as follows:
-# In the place of "Strategy Name", use the exact name of the strategy you're interested in, like "US", "Europe", "World", etc.
-specific_plot_v2 = your_plots_for_each_strategy_v2[["US"]]
-print(specific_plot_v2)
-
-# (2) If you would like to display multiple plots together, you can use the gridExtra package. 
-# You need to specify the plots you want to display as follows:
-grid.arrange(
-  your_plots_for_each_strategy_v2[[your_optimal_strategy_v2]],
-  your_plots_for_each_strategy_v2[["Europe"]],
-  ncol = 1  # Or any other number of columns you want
-)
-# Notice that, for a given investment strategy, the algorithm analyzes all relevant time periods. 
-# We display only a subset of this, for illustration purposes.
-
-# your_total_function_time
-# Print the total execution time of the function 
-print(paste("Execution time for TOTAL FUNCTION: ", round(your_total_function_time_v2, 2), "seconds"))
-
-
-
-
+#' We could also more efficiently plot graphs if we start from such a dataset of cumulative products.
+#' This is also a good idea, especially if you are planning to plot multiple graphs for different time horizons. 
+#' You can precompute the data needed for your plots and simply plot them when needed. 
+#' This will reduce the computation needed when generating your plots and can lead to a more responsive user interface.
 
 
 
@@ -614,33 +745,34 @@ print(paste("Execution time for TOTAL FUNCTION: ", round(your_total_function_tim
 # ---------------------------------------------------------------------------- #
 
 # Compare the performance of function determine_optimal_strategy_v1 with that of determine_optimal_strategy_v2 
+# NOT FUNCTIONAL (YET)
 
-# Define the range of years and minimum allowable percentage
-your_time_horizon_years <- seq(4, 12, 8) 
-your_minimum_allowable_percentage <- seq(0.50, 0.90, 0.40) 
-
-# Call the function compare_results with specified input parameters, running determine_optimal_strategy_v1
-# Remark that it returns 2 objects: list(df_comparison, results_compared)
-your_results_v1 <- compare_results(df_return_series = index_daily_returns_CHF, 
-                                   time_horizon_years = your_time_horizon_years, 
-                                   minimum_allowable_percentage = your_minimum_allowable_percentage,
-                                   optimization_function = determine_optimal_strategy_v1)
-df_comparison_v1 <- your_results_v1[[1]]
-results_compared_v1 <- your_results_v1[[2]]
-
-# Call the function compare_results with specified input parameters, running determine_optimal_strategy_v2
-# Remark that it returns 2 objects: list(df_comparison, results_compared)
-
-your_results_v2 <- compare_results(df_return_series = index_daily_returns_CHF, 
-                                   time_horizon_years = your_time_horizon_years, 
-                                   minimum_allowable_percentage = your_minimum_allowable_percentage,
-                                   optimization_function = determine_optimal_strategy_v2)
-df_comparison_v2 <- your_results_v1[[1]]
-results_compared_v2 <- your_results_v1[[2]]
-
-# Compare optimal strategies and total function times between determine_optimal_strategy_v1 and determine_optimal_strategy_v2
-print(df_comparison_v1)
-print(df_comparison_v2)
+# # Define the range of years and minimum allowable percentage
+# your_time_horizon_years <- seq(4, 12, 8) 
+# your_minimum_allowable_percentage <- seq(0.50, 0.90, 0.40) 
+# 
+# # Call the function compare_results with specified input parameters, running determine_optimal_strategy_v1
+# # Remark that it returns 2 objects: list(df_comparison, results_compared)
+# your_results_v1 <- compare_results(df_return_series = index_daily_returns_CHF, 
+#                                    time_horizon_years = your_time_horizon_years, 
+#                                    minimum_allowable_percentage = your_minimum_allowable_percentage,
+#                                    optimization_function = determine_optimal_strategy_v1)
+# df_comparison_v1 <- your_results_v1[[1]]
+# results_compared_v1 <- your_results_v1[[2]]
+# 
+# # Call the function compare_results with specified input parameters, running determine_optimal_strategy_v2
+# # Remark that it returns 2 objects: list(df_comparison, results_compared)
+# 
+# your_results_v2 <- compare_results(df_return_series = index_daily_returns_CHF, 
+#                                    time_horizon_years = your_time_horizon_years, 
+#                                    minimum_allowable_percentage = your_minimum_allowable_percentage,
+#                                    optimization_function = determine_optimal_strategy_v2)
+# df_comparison_v2 <- your_results_v1[[1]]
+# results_compared_v2 <- your_results_v1[[2]]
+# 
+# # Compare optimal strategies and total function times between determine_optimal_strategy_v1 and determine_optimal_strategy_v2
+# print(df_comparison_v1)
+# print(df_comparison_v2)
 
 
 
@@ -652,24 +784,67 @@ print(df_comparison_v2)
 # ------------------------------------------------------------------------------------------------ #
 
 #### (PRIORITY 1) TO RUN THE FOLLOWING LINES OF CODE: figure out (TO DO): ####
-# --> LUCA: a more computationally efficient "determine_optimal_strategy" function; 
 # --> MARCO/ARIQ(2) big data methods (parallel processing / cloud services) for extra computational efficiency (storage + processing) --> 
 
-# your_candidate_strategies_results_2 <- determine_optimal_strategy(df_return_series = strategies_max_2_comb_daily_rebal,
-                                                                  # time_horizon_years = 5,
-                                                                  # minimum_allowable_percentage = 0.75)
+### Testing our simplified function to determine the optimal investment strategy based on historical data...
 
-your_candidate_strategies_results_3 <- determine_optimal_strategy(df_return_series = strategies_max_3_comb_daily_rebal,
-                                                                  time_horizon_years = 10,
-                                                                  minimum_allowable_percentage = 0.75)
+# df_return_series <- strategies_max_4_comb_daily_rebal
+# time_horizon_years <- 12
+# minimum_allowable_percentage <- 0.75
+# granularity = "annually"
+# 
+# results_simplified_optimal_strategy <- determine_optimal_strategy_simplified(df_return_series, time_horizon_years, 
+#                                                                              minimum_allowable_percentage, granularity)
+# print(results_simplified_optimal_strategy[[1]])
+# print(paste("Execution time for TOTAL FUNCTION: ", round(results_simplified_optimal_strategy[[4]], 2), "seconds"))
 
-# your_candidate_strategies_results_4 <- determine_optimal_strategy(df_return_series = strategies_max_4_comb_daily_rebal, 
-#                                                                   time_horizon_years = 10, 
-#                                                                   minimum_allowable_percentage = 0.75)
 
-# your_candidate_strategies_results_5 <- determine_optimal_strategy(df_return_series = strategies_max_5_comb_daily_rebal, 
-#                                                                   time_horizon_years = 10, 
-#                                                                   minimum_allowable_percentage = 0.75)
+### Testing our first advanced function (A) to determine the optimal investment strategy based on historical data...
+
+# df_return_series <- strategies_max_3_comb_daily_rebal
+# time_horizon_years <- 12
+# minimum_allowable_percentage <- 0.75
+# 
+# results_advanced_optimal_strategy_A <- determine_optimal_strategy_advanced_A(df_return_series, time_horizon_years, 
+#                                                                              minimum_allowable_percentage, X_percentile = 0.50)
+# print(results_advanced_optimal_strategy_A[[1]])
+# print(paste("Execution time for TOTAL FUNCTION: ", round(results_advanced_optimal_strategy_A[[4]], 2), "seconds"))
+
+### Testing our first advanced function (A) on a larger dataset, but taking smaller X_percentiles
+
+# df_return_series <- strategies_max_4_comb_daily_rebal
+# time_horizon_years <- 12
+# minimum_allowable_percentage <- 0.75
+# 
+# results_advanced_optimal_strategy_A <- determine_optimal_strategy_advanced_A(df_return_series, time_horizon_years, 
+#                                                                              minimum_allowable_percentage, X_percentile = 0.40)
+# print(results_advanced_optimal_strategy_A[[1]])
+# print(paste("Execution time for TOTAL FUNCTION: ", round(results_advanced_optimal_strategy_A[[4]], 2), "seconds"))
+
+### Testing our second advanced function (B) to determine the optimal investment strategy based on historical data...
+
+# df_return_series <- strategies_max_3_comb_daily_rebal
+# time_horizon_years <- 12
+# minimum_allowable_percentage <- 0.75
+# 
+# results_advanced_optimal_strategy_B <- determine_optimal_strategy_advanced_B(df_return_series, time_horizon_years,
+#                                                                              minimum_allowable_percentage, X_percentile = 0.50)
+# print(results_advanced_optimal_strategy_B[[1]])
+# print(paste("Execution time for TOTAL FUNCTION: ", round(results_advanced_optimal_strategy_B[[4]], 2), "seconds"))
+
+
+
+### Testing our first advanced function (B) on a larger dataset, but taking smaller X_percentiles
+
+# df_return_series <- strategies_max_4_comb_daily_rebal
+# time_horizon_years <- 12
+# minimum_allowable_percentage <- 0.75
+# 
+# results_advanced_optimal_strategy_B <- determine_optimal_strategy_advanced_B(df_return_series, time_horizon_years, 
+#                                                                              minimum_allowable_percentage, X_percentile = 0.40)
+# print(results_advanced_optimal_strategy_B[[1]])
+# print(paste("Execution time for TOTAL FUNCTION: ", round(results_advanced_optimal_strategy_B[[4]], 2), "seconds"))
+
 
 # ------------------------------------------------------------------------------------------------ #
 
