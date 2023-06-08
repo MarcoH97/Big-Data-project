@@ -17,6 +17,7 @@ library(reshape2)
 library(scales)
 library(zoo)
 library(gridExtra)
+library(xts)
 
 
 ####
@@ -253,21 +254,139 @@ print(paste("swiss_inflation:", round(object.size(swiss_inflation) / 1048576, 2)
 
 # Feature engineering a large set of investment strategies (as separate columns). Strategies differ in: 
 # (a) their strategic asset allocation, i.e. different (equally-weighted) combinations of the 26 index return series.
-# (b) their rebalancing technique: periodic (e.g., daily/monthly/quarterly-semi-annually/annually) or threshold-based (e.g., 10%/20%/25% deviation from original weight)
+# (b) their periodic rebalancing technique: e.g., daily/monthly/quarterly/yearly)
 # Notice that, as we increase the number of combinations that we implement, the number of additional columns increases exponentially.
 
-# Generate new columns (different investment strategies of equally-weighted indices) from our daily index returns in CHF
+# Generate new data frames with additional investment strategies of equally-weighted indices, from our daily index returns in CHF
 strategies_max_2_comb_daily_rebal <- generate_weighted_cols_daily_rebal(index_daily_returns_CHF, 2)
+# [1] "Execution time:  0.358608961105347 seconds"
 strategies_max_3_comb_daily_rebal <- generate_weighted_cols_daily_rebal(index_daily_returns_CHF, 3)
+# [1] "Execution time:  3.06886792182922 seconds"
 strategies_max_4_comb_daily_rebal <- generate_weighted_cols_daily_rebal(index_daily_returns_CHF, 4)
+# [1] "Execution time:  149.042740821838 seconds"
 # strategies_max_5_comb_daily_rebal <- generate_weighted_cols_daily_rebal(index_daily_returns_CHF, 5)
+# # [1] "Execution time:  ??????? seconds" (TOO LONG)
+
+
+### Transform the dataframe from daily return series to xts aggregated time series that represent returns for yearly/quarterly/monthly/weekly rebalancing
+
+# Assuming 'Dates' column is in the format of "yyyy-mm-dd"
+index_daily_returns_CHF$Dates <- as.Date(index_daily_returns_CHF$Dates)
+
+xts_index_daily_returns_CHF <- xts(index_daily_returns_CHF[-1], order.by=index_daily_returns_CHF$Dates)
+
+# Define the function that applies the formula for compound returns 
+compound_return <- function(x) {
+  prod(1 + x) - 1
+}
+
+# Define the function that aggregates returns
+compound_return_multi_col  <- function(x) {
+  apply(x, 2, compound_return)
+}
+
+### Generate new xts objects with different investment strategies of equally-weighted indices, using our weekly/monthly/quarterly/yearly index returns in CHF
+# Create aggregated time series that represent returns for yearly/quarterly/monthly/weekly rebalancing 
+xts_index_yearly_returns_CHF <- apply.yearly(xts_index_daily_returns_CHF, compound_return_multi_col)
+xts_index_quarterly_returns_CHF <- apply.quarterly(xts_index_daily_returns_CHF, compound_return_multi_col)
+xts_index_monthly_returns_CHF <- apply.monthly(xts_index_daily_returns_CHF, compound_return_multi_col)
+xts_index_weekly_returns_CHF <- apply.weekly(xts_index_daily_returns_CHF, compound_return_multi_col)
+
+
+## Max 2 combinations: yearly/quarterly/monthly/weekly/daily rebalancing
+xts_strategies_max_2_comb_yearly_rebal <- xts_generate_weighted_cols(xts_return_series = xts_index_yearly_returns_CHF,
+                                                                     max_comb_size = 2)
+# [1] "Execution time:  1.55694222450256 seconds"
+
+xts_strategies_max_2_comb_quarterly_rebal <- xts_generate_weighted_cols(xts_return_series = xts_index_quarterly_returns_CHF,
+                                                                        max_comb_size = 2)
+# [1] "Execution time:  1.8990490436554 seconds"
+
+xts_strategies_max_2_comb_monthly_rebal <- xts_generate_weighted_cols(xts_return_series = xts_index_monthly_returns_CHF,
+                                                                      max_comb_size = 2)
+# [1] "Execution time:  1.95903587341309 seconds"
+
+xts_strategies_max_2_comb_weekly_rebal <- xts_generate_weighted_cols(xts_return_series = xts_index_weekly_returns_CHF,
+                                                                     max_comb_size = 2)
+# [1] "Execution time:  3.07245182991028 seconds"
+
+xts_strategies_max_2_comb_daily_rebal <- xts_generate_weighted_cols(xts_return_series = xts_index_daily_returns_CHF,
+                                                                    max_comb_size = 2)
+# [1] "Execution time:  6.8100950717926 seconds"
+
+
+## Max 3 combinations: yearly/quarterly/monthly/weekly/daily rebalancing
+xts_strategies_max_3_comb_yearly_rebal <- xts_generate_weighted_cols(xts_return_series = xts_index_yearly_returns_CHF,
+                                                                     max_comb_size = 3)
+# [1] "Execution time:  161.960761070251 seconds"
+
+xts_strategies_max_3_comb_quarterly_rebal <- xts_generate_weighted_cols(xts_return_series = xts_index_quarterly_returns_CHF,
+                                                                        max_comb_size = 3)
+# [1] "Execution time:  166.492907047272 seconds"
+
+xts_strategies_max_3_comb_monthly_rebal <- xts_generate_weighted_cols(xts_return_series = xts_index_monthly_returns_CHF,
+                                                                     max_comb_size = 3)
+# [1] "Execution time:  178.4279088974 seconds"
+
+xts_strategies_max_3_comb_weekly_rebal <- xts_generate_weighted_cols(xts_return_series = xts_index_weekly_returns_CHF,
+                                                                     max_comb_size = 3)
+# [1] "Execution time:  261.833109855652 seconds"
+
+xts_strategies_max_3_comb_daily_rebal <- xts_generate_weighted_cols(xts_return_series = xts_index_daily_returns_CHF,
+                                                                     max_comb_size = 3)
+# [1] "Execution time:  757.605960130692 seconds"
+
+
+## Max 4 combinations: yearly/quarterly/monthly/weekly/daily rebalancing
+# xts_strategies_max_4_comb_yearly_rebal <- xts_generate_weighted_cols(xts_return_series = xts_index_yearly_returns_CHF,
+#                                                                      max_comb_size = 4)
+# # [1] "Execution time:  ??????? seconds" (TOO LONG)
+# 
+# xts_strategies_max_4_comb_quarterly_rebal <- xts_generate_weighted_cols(xts_return_series = xts_index_quarterly_returns_CHF,
+#                                                                         max_comb_size = 4)
+# # [1] "Execution time:  ??????? seconds" (TOO LONG)
+# 
+# xts_strategies_max_4_comb_yearly_rebal <- xts_generate_weighted_cols(xts_return_series = xts_index_yearly_returns_CHF,
+#                                                                      max_comb_size = 4)
+# # [1] "Execution time:  ??????? seconds" (TOO LONG)
+# 
+# xts_strategies_max_4_comb_yearly_rebal <- xts_generate_weighted_cols(xts_return_series = xts_index_yearly_returns_CHF,
+#                                                                      max_comb_size = 4)
+# # [1] "Execution time:  ??????? seconds" (TOO LONG)
+# 
+# xts_strategies_max_4_comb_yearly_rebal <- xts_generate_weighted_cols(xts_return_series = xts_index_yearly_returns_CHF,
+#                                                                      max_comb_size = 4)
+# # [1] "Execution time:  ??????? seconds" (TOO LONG)
+
+
+
+## Max 5 combinations: yearly/quarterly/monthly/weekly/daily rebalancing
+# xts_strategies_max_5_comb_yearly_rebal <- xts_generate_weighted_cols(xts_return_series = xts_index_yearly_returns_CHF,
+#                                                                      max_comb_size = 5)
+# # [1] "Execution time:  ??????? seconds" (TOO LONG)
+# 
+# xts_strategies_max_5_comb_quarterly_rebal <- xts_generate_weighted_cols(xts_return_series = xts_index_quarterly_returns_CHF,
+#                                                                         max_comb_size = 5)
+# # [1] "Execution time:  ??????? seconds" (TOO LONG)
+# 
+# xts_strategies_max_5_comb_yearly_rebal <- xts_generate_weighted_cols(xts_return_series = xts_index_yearly_returns_CHF,
+#                                                                      max_comb_size = 5)
+# # [1] "Execution time:  ??????? seconds" (TOO LONG)
+# 
+# xts_strategies_max_5_comb_yearly_rebal <- xts_generate_weighted_cols(xts_return_series = xts_index_yearly_returns_CHF,
+#                                                                      max_comb_size = 5)
+# # [1] "Execution time:  ??????? seconds" (TOO LONG)
+# 
+# xts_strategies_max_5_comb_yearly_rebal <- xts_generate_weighted_cols(xts_return_series = xts_index_yearly_returns_CHF,
+#                                                                      max_comb_size = 5)
+# # [1] "Execution time:  ??????? seconds" (TOO LONG)
+
 
 
 # ------------------------------------------------------------------------------------------------ #
 
 #### (PRIORITY 2) TO RUN THE FOLLOWING LINES OF CODE: figure out (TO DO): ####
-# --> LUCA: a flexible "generate_weighted_cols" function (for different possible periodic rebalancing techniques), that is also computationally efficient
-# --> LUCA: a more computationally efficient "generate_weighted_cols_daily_rebal" and (flexible) "generate_weighted_cols" function;
+# --> LUCA: a "generate_weighted_cols" function that is more computationally efficient
 # --> MARCO/ARIQ(2) big data methods (parallel processing / cloud services) for extra computational efficiency (storage + processing) 
 
 # strategies_max_5_comb_daily_rebal <- generate_weighted_cols_daily_rebal(index_daily_returns_CHF, 5)
@@ -275,19 +394,36 @@ strategies_max_4_comb_daily_rebal <- generate_weighted_cols_daily_rebal(index_da
 
 # ------------------------------------------------------------------------------------------------ #
 
-
-# Inspect (a subset of) the generated dataframes
-head(strategies_max_2_comb_daily_rebal[, 1:30], 5)
-head(strategies_max_3_comb_daily_rebal[, 1:30], 5)
-head(strategies_max_4_comb_daily_rebal[, 1:30], 5)
-tail(strategies_max_2_comb_daily_rebal[, (ncol(strategies_max_2_comb_daily_rebal)-4):ncol(strategies_max_2_comb_daily_rebal)], 5)
-tail(strategies_max_3_comb_daily_rebal[, (ncol(strategies_max_3_comb_daily_rebal)-4):ncol(strategies_max_3_comb_daily_rebal)], 5)
-tail(strategies_max_4_comb_daily_rebal[, (ncol(strategies_max_4_comb_daily_rebal)-4):ncol(strategies_max_4_comb_daily_rebal)], 5)
-
-# Inspect the size of the generated data that contains the different investment strategies
+# Inspect the size of the generated dataframes that contain the different investment strategies
 print(paste("strategies_max_2_comb_daily_rebal (generated):", round(object.size(strategies_max_2_comb_daily_rebal) / 1048576, 2), "MB"))
+# [1] "strategies_max_2_comb_daily_rebal (generated): 13.64 MB"
 print(paste("strategies_max_3_comb_daily_rebal (generated):", round(object.size(strategies_max_3_comb_daily_rebal) / 1048576, 2), "MB"))
+# [1] "strategies_max_3_comb_daily_rebal (generated): 114.36 MB"
 print(paste("strategies_max_4_comb_daily_rebal (generated):", round(object.size(strategies_max_4_comb_daily_rebal) / 1048576, 2), "MB"))
+# [1] "strategies_max_4_comb_daily_rebal (generated): 693.83 MB"
+
+# Inspect the size of the generated xts objects that contain the different investment strategies
+print(paste("xts_strategies_max_2_comb_yearly_rebal (generated):", round(object.size(xts_strategies_max_2_comb_yearly_rebal) / 1048576, 2), "MB"))
+# [1] "xts_strategies_max_2_comb_yearly_rebal (generated): 0.09 MB"
+print(paste("xts_strategies_max_2_comb_quarterly_rebal (generated):", round(object.size(xts_strategies_max_2_comb_quarterly_rebal) / 1048576, 2), "MB"))
+# [1] "xts_strategies_max_2_comb_quarterly_rebal (generated): 0.25 MB"
+print(paste("xts_strategies_max_2_comb_monthly_rebal (generated):", round(object.size(xts_strategies_max_2_comb_monthly_rebal) / 1048576, 2), "MB"))
+# [1] "xts_strategies_max_2_comb_monthly_rebal (generated): 0.66 MB"
+print(paste("xts_strategies_max_2_comb_weekly_rebal (generated):", round(object.size(xts_strategies_max_2_comb_weekly_rebal) / 1048576, 2), "MB"))
+# [1] "xts_strategies_max_2_comb_weekly_rebal (generated): 2.75 MB"
+print(paste("xts_strategies_max_2_comb_daily_rebal (generated):", round(object.size(xts_strategies_max_2_comb_daily_rebal) / 1048576, 2), "MB"))
+# [1] "xts_strategies_max_2_comb_daily_rebal (generated): 13.6 MB"
+
+print(paste("xts_strategies_max_3_comb_yearly_rebal (generated):", round(object.size(xts_strategies_max_3_comb_yearly_rebal) / 1048576, 2), "MB"))
+# [1] "xts_strategies_max_3_comb_yearly_rebal (generated): 0.88 MB"
+print(paste("xts_strategies_max_3_comb_quarterly_rebal (generated):", round(object.size(xts_strategies_max_3_comb_quarterly_rebal) / 1048576, 2), "MB"))
+# [1] "xts_strategies_max_3_comb_quarterly_rebal (generated): 2.18 MB"
+print(paste("xts_strategies_max_3_comb_monthly_rebal (generated):", round(object.size(xts_strategies_max_3_comb_monthly_rebal) / 1048576, 2), "MB"))
+# [1] "xts_strategies_max_3_comb_monthly_rebal (generated): 5.67 MB"
+print(paste("xts_strategies_max_3_comb_weekly_rebal (generated):", round(object.size(xts_strategies_max_3_comb_weekly_rebal) / 1048576, 2), "MB"))
+# [1] "xts_strategies_max_3_comb_weekly_rebal (generated): 23.2 MB"
+print(paste("xts_strategies_max_3_comb_daily_rebal (generated):", round(object.size(xts_strategies_max_3_comb_daily_rebal) / 1048576, 2), "MB"))
+# [1] "xts_strategies_max_3_comb_daily_rebal (generated): 114.18 MB"
 
 
 ####
@@ -321,7 +457,7 @@ plot_mean_variance_graph(strategies_max_4_comb_daily_rebal)
 ### SAVE CURRENT WORKSPACE / LOAD CURRENT WORKSPACE ###
 
 # Save all objects in the workspace to a file named 'my_workspace.RData'
-# save.image('max_4_comb_daily_rebal.RData')
+# save.image('all_data_max_4_comb.RData')
 
 # Get the directory path of the current code file
 PATH <- dirname(rstudioapi::getSourceEditorContext()$path)
@@ -329,11 +465,9 @@ PATH <- dirname(rstudioapi::getSourceEditorContext()$path)
 setwd(PATH)
 # Load the objects from 'my_workspace.RData' into the workspace
 # It's a good practice to start a new session or clear the workspace before loading the saved objects.
-load('max_4_comb_daily_rebal.RData')
-
+load('all_data_max_4_comb.RData')
 # Load functions file
 source("BDA_BDBD_functions - Luca.R")
-library(gridExtra)
 
 
 # ------------------------------------------------------------------------------------------------------ #
@@ -665,7 +799,7 @@ print(df_comparison_vectorization_timers)
 #' (b) skip (i.e. break out of the loop for) an investment strategy if it can no longer be the optimal strategy, 
 #' when it has at least one relevant time period during which it drops below the minimum acceptable cumulative return
 #' (c) generate desired plots separately from the process of finding the optimal investment strategy
-#' (d) transform the dataset from daily return series to weekly/monthly/quarterly/bi-annual/annual return series, which would imply weekly/monthly/quarterly/bi-annual/annual rebalancing and less computations
+#' (d) transform the dataset from daily return series to weekly/monthly/quarterly/bi-yearly/yearly return series, which would imply weekly/monthly/quarterly/bi-yearly/yearly rebalancing and less computations
 #' 
 
 ### Testing our simplified function to determine the optimal investment strategy based on historical data...
@@ -676,19 +810,19 @@ print(df_comparison_vectorization_timers)
 # df_return_series <- strategies_max_4_comb_daily_rebal
 time_horizon_years <- 12
 minimum_allowable_percentage <- 0.75
-granularity = "annually"
+granularity = "yearly"
 
-results_simplified_optimal_strategy <- determine_optimal_strategy_simplified(df_return_series = strategies_max_4_comb_daily_rebal, 
+results_simplified_optimal_strategy <- determine_optimal_strategy_simplified(df_return_series = index_daily_returns_CHF, 
                                                                              time_horizon_years, 
                                                                              minimum_allowable_percentage, 
                                                                              granularity)
-#' [1] "Execution time for FUNCTION determine_optimal_strategy_simplified, DATASET index_daily_returns_CHF , GRANULARITY annually : 
+#' [1] "Execution time for FUNCTION determine_optimal_strategy_simplified, DATASET index_daily_returns_CHF , GRANULARITY yearly : 
 #' 0.04 seconds"
-#' [1] "Execution time for FUNCTION determine_optimal_strategy_simplified, DATASET strategies_max_2_comb_daily_rebal , GRANULARITY annually : 
+#' [1] "Execution time for FUNCTION determine_optimal_strategy_simplified, DATASET strategies_max_2_comb_daily_rebal , GRANULARITY yearly : 
 #' 0.47 seconds"
-#' [1] "Execution time for FUNCTION determine_optimal_strategy_simplified, DATASET strategies_max_3_comb_daily_rebal , GRANULARITY annually : 
+#' [1] "Execution time for FUNCTION determine_optimal_strategy_simplified, DATASET strategies_max_3_comb_daily_rebal , GRANULARITY yearly : 
 #' 7.04 seconds"
-#' [1] "Execution time for FUNCTION determine_optimal_strategy_simplified, DATASET strategies_max_4_comb_daily_rebal , GRANULARITY annually : 
+#' [1] "Execution time for FUNCTION determine_optimal_strategy_simplified, DATASET strategies_max_4_comb_daily_rebal , GRANULARITY yearly : 
 #' 189.6 seconds"
 
 
@@ -730,7 +864,7 @@ results_advanced_optimal_strategy_A <- determine_optimal_strategy_advanced_A(df_
 #' [1] "Execution time for FUNCTION determine_optimal_strategy_advanced_A and DATASET strategies_max_3_comb_daily_rebal : 
 #' 14.08 seconds"
 #' [1] "Execution time for FUNCTION determine_optimal_strategy_advanced_A and DATASET strategies_max_4_comb_daily_rebal : 
-#' 278.19 seconds" --> 216 seconds annually; 24.3 seconds bi-annually; 9.36 seconds quarterly; 3.99 seconds monthly; 7.42 seconds weekly; 17.11 seconds daily
+#' 278.19 seconds" --> 216 seconds yearly; 24.3 seconds bi-yearly; 9.36 seconds quarterly; 3.99 seconds monthly; 7.42 seconds weekly; 17.11 seconds daily
 
 print(results_advanced_optimal_strategy_A[[1]])
 print(paste("Execution time for TOTAL FUNCTION: ", round(results_advanced_optimal_strategy_A[[4]], 2), "seconds"))
@@ -780,54 +914,66 @@ head(results_advanced_optimal_strategy_B[[3]], 3)
 tail(results_advanced_optimal_strategy_B[[3]], 3)
 
 
-### Transform the dataset from daily return series to weekly/monthly/quarterly/bi-annual/annual return series
+#### CURRENT WORK ####
 
-# Load libraries
-library(xts)
-library(zoo)
+### Now for xts objects, also testing our simplified function to determine the optimal investment strategy based on historical data...
 
-# Assuming 'Dates' column is in the format of "yyyy-mm-dd"
-index_daily_returns_CHF$Dates <- as.Date(index_daily_returns_CHF$Dates)
+xts_results_simplified_optimal_strategy_max_2_comb_yearly_rebal <- xts_determine_optimal_strategy_simplified(xts_return_series = xts_strategies_max_2_comb_yearly_rebal, 
+                                                                                     time_horizon_years = 12, 
+                                                                                     minimum_allowable_percentage = 0.75, 
+                                                                                     granularity = "yearly")
+# [1] "Execution time for FUNCTION xts_determine_optimal_strategy_simplified, DATASET df_return_series , GRANULARITY yearly : 2.07 seconds"
+xts_results_simplified_optimal_strategy_max_2_comb_quarterly_rebal <- xts_determine_optimal_strategy_simplified(xts_return_series = xts_strategies_max_2_comb_quarterly_rebal, 
+                                                                                     time_horizon_years = 12, 
+                                                                                     minimum_allowable_percentage = 0.75, 
+                                                                                     granularity = "quarterly")
 
-xts_index_daily_returns_CHF <- xts(index_daily_returns_CHF[-1], order.by=index_daily_returns_CHF$Dates)
+xts_results_simplified_optimal_strategy_max_2_comb_monthly_rebal <- xts_determine_optimal_strategy_simplified(xts_return_series = xts_strategies_max_2_comb_monthly_rebal, 
+                                                                                     time_horizon_years = 12, 
+                                                                                     minimum_allowable_percentage = 0.75, 
+                                                                                     granularity = "monthly")
+# [1] "Execution time for FUNCTION xts_determine_optimal_strategy_simplified, DATASET df_return_series , GRANULARITY quarterly : 7 seconds"
+xts_results_simplified_optimal_strategy_max_2_comb_weekly_rebal <- xts_determine_optimal_strategy_simplified(xts_return_series = xts_strategies_max_2_comb_weekly_rebal, 
+                                                                                     time_horizon_years = 12, 
+                                                                                     minimum_allowable_percentage = 0.75, 
+                                                                                     granularity = "weekly")
+# [1] "Execution time for FUNCTION xts_determine_optimal_strategy_simplified, DATASET df_return_series , GRANULARITY weekly : 60.61 seconds"
+xts_results_simplified_optimal_strategy_max_2_comb_daily_rebal <- xts_determine_optimal_strategy_simplified(xts_return_series = xts_strategies_max_2_comb_daily_rebal, 
+                                                                                     time_horizon_years = 12, 
+                                                                                     minimum_allowable_percentage = 0.75, 
+                                                                                     granularity = "daily")
+# EXECUTION TIME ???
+xts_results_simplified_optimal_strategy_max_3_comb_yearly_rebal <- xts_determine_optimal_strategy_simplified(xts_return_series = xts_strategies_max_3_comb_yearly_rebal, 
+                                                                                                             time_horizon_years = 12, 
+                                                                                                             minimum_allowable_percentage = 0.75, 
+                                                                                                             granularity = "yearly")
+# [1] "Execution time for FUNCTION xts_determine_optimal_strategy_simplified, DATASET df_return_series , GRANULARITY yearly : 19.92 seconds"
+xts_results_simplified_optimal_strategy_max_3_comb_quarterly_rebal <- xts_determine_optimal_strategy_simplified(xts_return_series = xts_strategies_max_3_comb_quarterly_rebal, 
+                                                                                                                time_horizon_years = 12, 
+                                                                                                                minimum_allowable_percentage = 0.75, 
+                                                                                                                granularity = "quarterly")
+# EXECUTION TIME ???
+xts_results_simplified_optimal_strategy_max_3_comb_monthly_rebal <- xts_determine_optimal_strategy_simplified(xts_return_series = xts_strategies_max_3_comb_monthly_rebal, 
+                                                                                                              time_horizon_years = 12, 
+                                                                                                              minimum_allowable_percentage = 0.75, 
+                                                                                                              granularity = "monthly")
+# EXECUTION TIME ???
+xts_results_simplified_optimal_strategy_max_3_comb_weekly_rebal <- xts_determine_optimal_strategy_simplified(xts_return_series = xts_strategies_max_3_comb_weekly_rebal, 
+                                                                                                             time_horizon_years = 12, 
+                                                                                                             minimum_allowable_percentage = 0.75, 
+                                                                                                             granularity = "weekly")
+# EXECUTION TIME ???
+xts_results_simplified_optimal_strategy_max_3_comb_daily_rebal <- xts_determine_optimal_strategy_simplified(xts_return_series = xts_strategies_max_3_comb_daily_rebal, 
+                                                                                                            time_horizon_years = 12, 
+                                                                                                            minimum_allowable_percentage = 0.75, 
+                                                                                                            granularity = "daily")
+# EXECUTION TIME ???
 
-# Define the function that applies the formula for compound returns 
-compound_return <- function(x) {
-  prod(1 + x) - 1
-}
 
-# Define the function that aggregates returns
-compound_return_multi_col  <- function(x) {
-  apply(x, 2, compound_return)
-  }
-
-# Use the 'apply.monthly', 'apply.quarterly', 'apply.yearly' (and so on) functions to create aggregated time series
-xts_index_weekly_returns_CHF <- apply.weekly(xts_index_daily_returns_CHF, compound_return_multi_col)
-xts_index_monthly_returns_CHF <- apply.monthly(xts_index_daily_returns_CHF, compound_return_multi_col)
-xts_index_quarterly_returns_CHF <- apply.quarterly(xts_index_daily_returns_CHF, compound_return_multi_col)
-xts_index_biannual_returns_CHF <- apply.yearly(xts_index_daily_returns_CHF[endpoints(xts_index_daily_returns_CHF, "months", k=6)], compound_return_multi_col)
-xts_index_annual_returns_CHF <- apply.yearly(xts_index_daily_returns_CHF, compound_return_multi_col)
-
-provide_overview <- function(data) {
-  print(colnames(data))
-  print(head(data,3))
-  print(tail(data,3))
-  return()
-}
-
-provide_overview(xts_index_daily_returns_CHF)
-xts_index_annual_returns_CHF <- apply.yearly(xts_index_daily_returns_CHF, compound_return_multi_col)
-provide_overview(xts_index_annual_returns_CHF)
+# It is clear that these functions applied to our xts objects are running less efficiently than the functions applied to our dataframes
 
 
-head(xts_index_daily_returns_CHF$US, 300)
-
-
-
-
-
-
-### Other idea:
+### Other idea (~ 4.	Memory pre-allocation):
 # In advance, compute a dataset that contains all cumulative products for different possible time horizons (1, 2, ..., 20 years).
 # Depending on the user-specified time horizon and minimum allowable value, within the relevant subset of the data (i.e. the part that corresponds to the user-specified time horizon) we simply search for the one optimal strategy (the one column) that contains
 # (i) no cumulative products below the threshold
@@ -845,8 +991,6 @@ head(xts_index_daily_returns_CHF$US, 300)
 #' This is also a good idea, especially if you are planning to plot multiple graphs for different time horizons. 
 #' You can precompute the data needed for your plots and simply plot them when needed. 
 #' This will reduce the computation needed when generating your plots and can lead to a more responsive user interface.
-
-
 
 
 # 4. Memory pre-allocation 
@@ -956,7 +1100,7 @@ head(xts_index_daily_returns_CHF$US, 300)
 # df_return_series <- strategies_max_4_comb_daily_rebal
 # time_horizon_years <- 12
 # minimum_allowable_percentage <- 0.75
-# granularity = "annually"
+# granularity = "yearly"
 # 
 # results_simplified_optimal_strategy <- determine_optimal_strategy_simplified(df_return_series, time_horizon_years, 
 #                                                                              minimum_allowable_percentage, granularity)

@@ -1,8 +1,3 @@
-# Import packages
-library(dplyr)
-library(zoo)
-library(ggplot2)
-
 # Define a function that determines the start of N/A data for each column of a data frame
 determine_start_dates <- function(dataframe) {
   # Initialize a list to hold the results
@@ -166,6 +161,57 @@ generate_weighted_cols_daily_rebal <- function(index_returns, max_comb_size) {
   
   return(index_returns)
 }
+
+
+# Define a function that generates columns of equally-weighted indices, with periodic rebalancing
+xts_generate_weighted_cols <- function(xts_return_series, max_comb_size) {
+  # Start timer to later display how long the function took to run
+  start_time <- Sys.time()
+  
+  # Replace "-" by "_" in column names
+  names(xts_return_series) <- gsub("-", "_", names(xts_return_series))
+  
+  # Create an xts object that contains the initial investment strategies (investing 100% in an index)
+  investment_strategies <- xts_return_series
+  
+  # Get the number of columns (indices) in the dataframe
+  num_cols <- ncol(investment_strategies)
+  
+  # Iterate over i for i-combinations
+  for (i in 2:min(num_cols, max_comb_size)) {
+    # Generate all i-combinations of column indices
+    combos <- combinat::combn(1:num_cols, i, simplify = FALSE)
+    
+    # Iterate over each combination
+    for (combo in combos) {
+      # Calculate the new column as the row-wise mean of the selected columns
+      new_col <- rowMeans(investment_strategies[, combo])
+      
+      # Convert new_col to xts
+      new_col_xts <- xts(new_col, order.by=index(xts_return_series))
+      
+      # Create the new column name
+      new_col_name <- paste(names(investment_strategies)[combo], collapse = " & ")
+      colnames(new_col_xts) <- new_col_name
+      
+      # Add the new column to the xts object
+      xts_return_series <- merge(xts_return_series, new_col_xts)
+      
+    }
+  }  
+  
+  # Replace "...." by " & " and "." by " " in column names
+  names(xts_return_series) <- gsub("\\.\\.\\.\\.", " & ", names(xts_return_series))
+  names(xts_return_series) <- gsub("\\.", " ", names(xts_return_series))
+  
+  # Display how long the function took to run
+  end_time <- Sys.time()
+  execution_time <- as.numeric(end_time - start_time, units = "secs")
+  print(paste("Execution time: ", execution_time, "seconds"))
+  
+  return(xts_return_series)
+}
+
 
 # Define a function that plots the correlation matrix between returns of different investment strategies (first column is "Dates")
 plot_correlation_matrix <- function(df_return_series) {
@@ -919,8 +965,8 @@ determine_optimal_strategy_simplified <- function(df_return_series, time_horizon
                  "weekly" = 5,
                  "monthly" = 21,
                  "quarterly" = 63,
-                 "bi-annually" = 126,
-                 "annually" = 252,
+                 "bi-yearly" = 126,
+                 "yearly" = 252,
                  stop("Invalid granularity"))
 
   # Initialize constants and variables
@@ -930,10 +976,6 @@ determine_optimal_strategy_simplified <- function(df_return_series, time_horizon
   # Initialize data frames to store results
   df_above_threshold <- data.frame(Strategy = character(), LowestCumulativeReturn = numeric())
   df_refused <- data.frame(Strategy = character())
-  
-  # Initialize lists to store the lowest and highest return series for each strategy
-  lowest_series <- list()
-  highest_series <- list()
   
   # Main loop over each strategy
   for (col in names(df_return_series)[-1]) {
@@ -961,21 +1003,17 @@ determine_optimal_strategy_simplified <- function(df_return_series, time_horizon
       # Keep track of the lowest cumulative return for the current strategy
       if (cum_returns_time_period[length(cum_returns_time_period)] < lowest_cumulative_return) {
         lowest_cumulative_return <- cum_returns_time_period[length(cum_returns_time_period)]
-        lowest_cumulative_series <- cum_returns_time_period
       }
       
       # Keep track of the highest cumulative return for the current strategy
       if (cum_returns_time_period[length(cum_returns_time_period)] > highest_cumulative_return) {
         highest_cumulative_return <- cum_returns_time_period[length(cum_returns_time_period)]
-        highest_cumulative_series <- cum_returns_time_period
       }
     }
 
     # If the strategy is not marked for exclusion add to df_above_threshold
     if (exclude == FALSE) {
       df_above_threshold <- rbind(df_above_threshold, data.frame(Strategy = col, LowestCumulativeReturn = lowest_cumulative_return, HighestCumulativeReturn = highest_cumulative_return))
-      lowest_series[[col]] <- lowest_cumulative_series
-      highest_series[[col]] <- highest_cumulative_series
     }
   }
   
@@ -1009,7 +1047,7 @@ determine_optimal_strategy_advanced_A <- function(df_return_series, time_horizon
   total_function_start <- Sys.time()
   
   # Define the granularities to be used in sequence
-  granularities <- c("annually", "bi-annually", "quarterly", "monthly", "weekly", "daily")
+  granularities <- c("yearly", "bi-yearly", "quarterly", "monthly", "weekly", "daily")
   
   # Initialize the data to the full dataset
   data_to_analyze <- df_return_series
@@ -1075,7 +1113,7 @@ determine_optimal_strategy_advanced_B <- function(df_return_series, time_horizon
   total_function_start <- Sys.time()
   
   # Define the granularities to be used in sequence
-  granularities <- c("annually", "bi-annually", "quarterly", "monthly", "weekly", "daily")
+  granularities <- c("yearly", "bi-yearly", "quarterly", "monthly", "weekly", "daily")
   
   # Initialize the data to the full dataset
   data_to_analyze <- df_return_series
@@ -1144,6 +1182,88 @@ determine_optimal_strategy_advanced_B <- function(df_return_series, time_horizon
   # Return the results from the final granularity level
   return(results)
 }
+
+
+xts_determine_optimal_strategy_simplified <- function(xts_return_series = xts_index_yearly_returns_CHF, 
+                                                      time_horizon_years = 12, 
+                                                      minimum_allowable_percentage = 0.75, 
+                                                      granularity = "yearly") {
+  # Start timer for performance tracking
+  total_function_start_0 <- Sys.time()
+  
+  # Initialize constants and variables
+  granularity <- tolower(granularity)
+  periods_per_year <- switch(granularity,
+                 "daily" = 252,
+                 "weekly" = 52,
+                 "monthly" = 12,
+                 "quarterly" = 4,
+                 "yearly" = 1,
+                 stop("Invalid granularity"))
+  
+  time_horizon_periods <- time_horizon_years * periods_per_year
+  
+  # Initialize data frames to store results
+  df_above_threshold <- data.frame(Strategy = character(), LowestCumulativeReturn = numeric())
+  df_refused <- data.frame(Strategy = character())
+  
+  # Main loop over each strategy
+  for (col in names(xts_return_series)) {
+    
+    # Initialization of variables for current strategy
+    lowest_cumulative_return <- Inf
+    highest_cumulative_return <- -Inf 
+    lowest_cumulative_series <- NULL
+    highest_cumulative_series <- NULL 
+    exclude <- FALSE
+    
+    # Loop over all possible starting times for the specified time horizon
+    for (i in seq(1, (nrow(xts_return_series) - time_horizon_periods))) {
+      # Compute cumulative returns for the current time period
+      cum_returns_time_period <- cumprod(1 + xts_return_series[i:(i + time_horizon_periods - 1), col])
+      
+      # Check if the minimum cumulative return is below the threshold. 
+      # If so, exclude the strategy, add it to df_refused and break out of the current loop
+      if (any(cum_returns_time_period < minimum_allowable_percentage)) {
+        exclude <- TRUE
+        df_refused <- rbind(df_refused, data.frame(Strategy = col))
+        break
+      }
+      
+      # Keep track of the lowest cumulative return for the current strategy
+      if (as.numeric(last(cum_returns_time_period))  < lowest_cumulative_return) {
+        lowest_cumulative_return <- cum_returns_time_period[length(cum_returns_time_period)]
+      }
+      
+      # Keep track of the highest cumulative return for the current strategy
+      if (as.numeric(last(cum_returns_time_period)) > highest_cumulative_return) {
+        highest_cumulative_return <- cum_returns_time_period[length(cum_returns_time_period)]
+      }
+    }
+    
+    # If the strategy is not marked for exclusion add to df_above_threshold
+    if (exclude == FALSE) {
+      df_above_threshold <- rbind(df_above_threshold, 
+                                  data.frame(Strategy = col, 
+                                             LowestCumulativeReturn = as.numeric(coredata(last(lowest_cumulative_return))), 
+                                             HighestCumulativeReturn = as.numeric(coredata(last(highest_cumulative_return)))))
+      }
+  }
+  
+  # Select the optimal strategy as the one with the highest minimum cumulative return that didn't fall below the threshold
+  optimal_strategy <- df_above_threshold[which.max(df_above_threshold$LowestCumulativeReturn), "Strategy"]
+  
+  # Compute and print the total execution time of the function
+  total_function_end_0 <- Sys.time()
+  total_function_time_0 <- as.numeric(total_function_end_0 - total_function_start_0, units = "secs")
+  print(paste("Execution time for FUNCTION xts_determine_optimal_strategy_simplified, DATASET", deparse(substitute(df_return_series)), ", GRANULARITY", granularity, ":", round(total_function_time_0, 2), "seconds"))
+  
+  # Return a list with the optimal strategy, two data frames for the strategies above threshold and refused, and the total execution time of the function
+  return(list(optimal_strategy, df_above_threshold, df_refused, total_function_time_0))
+}
+
+
+
 
 
 
