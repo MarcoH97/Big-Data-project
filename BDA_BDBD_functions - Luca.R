@@ -434,7 +434,7 @@ determine_optimal_strategy_v1 <- function(df_return_series, time_horizon_years, 
   # Compute and print the total execution time of the function
   total_function_end <- Sys.time()
   total_function_time <- as.numeric(total_function_end - total_function_start, units = "secs")
-  print(paste("Execution time for TOTAL FUNCTION: ", round(total_function_time, 2), "seconds"))
+  print(paste("Execution time for FUNCTION determine_optimal_strategy_v1 and DATASET", deparse(substitute(df_return_series)), ":", round(total_function_time, 2), "seconds"))
   
   # Return the plots, optimal strategy, and data frames of results
   return(list(plot_lowest_cum_returns, optimal_strategy, plot_optimal_strategy, df_above_threshold, df_refused, plot_list_different_periods_within_strategies, total_function_time))
@@ -454,7 +454,7 @@ determine_optimal_strategy_v1 <- function(df_return_series, time_horizon_years, 
 #' @return A list containing the following elements:
 #' - df_comparison: a data frame containing the optimal strategies and calculation times for different combinations of years and minimum values.
 #' - results_compared: a list storing more detailed information from each run, including plots and strategies that are above and below the specified threshold.
-compare_results <- function(df_return_series, time_horizon_years, minimum_allowable_percentage, optimization_function) {
+compare_results_v1 <- function(df_return_series, time_horizon_years, minimum_allowable_percentage, optimization_function) {
   # Initialize an empty list to store the comparison results
   results_compared <- list()
   
@@ -463,8 +463,8 @@ compare_results <- function(df_return_series, time_horizon_years, minimum_allowa
     for (minimum_value in minimum_allowable_percentage) {
       # Call the function determine_optimal_strategy_v1 with the specified input parameters
       results_candidate_strategies <- optimization_function(df_return_series = df_return_series, 
-                                                                    time_horizon_years = years, 
-                                                                    minimum_allowable_percentage = minimum_value)
+                                                            time_horizon_years = years, 
+                                                            minimum_allowable_percentage = minimum_value)
       
       # Extract the results from the function output into individual variables
       your_plot_lowest_returns_for_each_strategy <- results_candidate_strategies[[1]]
@@ -702,7 +702,7 @@ determine_optimal_strategy_v1_timers <- function(df_return_series, time_horizon_
   # Compute and print the total execution time of TOTAL FUNCTION
   total_function_end_0 <- Sys.time()
   total_function_time_0 <- as.numeric(total_function_end_0 - total_function_start_0, units = "secs")
-  print(paste("Execution time for TOTAL FUNCTION: ", round(total_function_time_0, 2), "seconds"))
+  print(paste("Execution time for FUNCTION determine_optimal_strategy_v1_timers and DATASET", deparse(substitute(df_return_series)), ":", round(total_function_time_0, 2), "seconds"))
   
   # Return the plots, optimal strategy, and data frames of results
   return(list(plot_lowest_cum_returns, optimal_strategy, plot_optimal_strategy, df_above_threshold, df_refused, plot_list_different_periods_within_strategies, total_function_time_0))
@@ -882,7 +882,7 @@ determine_optimal_strategy_vectorization_timers <- function(df_return_series, ti
   # Compute and print the total execution time of TOTAL FUNCTION
   total_function_end_0 <- Sys.time()
   total_function_time_0 <- as.numeric(total_function_end_0 - total_function_start_0, units = "secs")
-  print(paste("Execution time for TOTAL FUNCTION: ", round(total_function_time_0, 2), "seconds"))
+  print(paste("Execution time for FUNCTION determine_optimal_strategy_vectorization_timers and DATASET", deparse(substitute(df_return_series)), ":", round(total_function_time_0, 2), "seconds"))
   
   # Return the plots, optimal strategy, and data frames of results
   return(list(plot_lowest_cum_returns, optimal_strategy, plot_optimal_strategy, df_above_threshold, df_refused, plot_list_different_periods_within_strategies, total_function_time_0))
@@ -910,7 +910,7 @@ determine_optimal_strategy_vectorization_timers <- function(df_return_series, ti
 determine_optimal_strategy_simplified <- function(df_return_series, time_horizon_years, 
                                                   minimum_allowable_percentage, granularity = "daily") {
   # Start timer for performance tracking
-  total_function_start <- Sys.time()
+  total_function_start_0 <- Sys.time()
   
   # Set granularity level for skipping intervals in the analysis
   granularity <- tolower(granularity)
@@ -983,11 +983,12 @@ determine_optimal_strategy_simplified <- function(df_return_series, time_horizon
   optimal_strategy <- df_above_threshold[which.max(df_above_threshold$LowestCumulativeReturn), "Strategy"]
   
   # Compute and print the total execution time of the function
-  total_function_end <- Sys.time()
-  total_function_time <- as.numeric(total_function_end - total_function_start, units = "secs")
+  total_function_end_0 <- Sys.time()
+  total_function_time_0 <- as.numeric(total_function_end_0 - total_function_start_0, units = "secs")
+  print(paste("Execution time for FUNCTION determine_optimal_strategy_simplified, DATASET", deparse(substitute(df_return_series)), ", GRANULARITY", granularity, ":", round(total_function_time_0, 2), "seconds"))
   
   # Return a list with the optimal strategy, two data frames for the strategies above threshold and refused, and the total execution time of the function
-  return(list(optimal_strategy, df_above_threshold, df_refused, total_function_time))
+  return(list(optimal_strategy, df_above_threshold, df_refused, total_function_time_0))
 }
 
 
@@ -1003,7 +1004,7 @@ determine_optimal_strategy_simplified <- function(df_return_series, time_horizon
 #
 # @return A list containing the results of the analysis on the final level of granularity and the total execution time.
 determine_optimal_strategy_advanced_A <- function(df_return_series, time_horizon_years, 
-                                                  minimum_allowable_percentage, X_percentile = 0.40) {
+                                                  minimum_allowable_percentage, cutoff_percentile = 0.50) {
   # Start timer for performance tracking
   total_function_start <- Sys.time()
   
@@ -1014,21 +1015,28 @@ determine_optimal_strategy_advanced_A <- function(df_return_series, time_horizon
   data_to_analyze <- df_return_series
   
   for (granularity in granularities) {
+    # Display information about the current data to analyze
+    print(paste("Current level of granularity:", granularity))
+    print(paste("Top remaining strategies for analysis", granularity, ":"))
+    if(ncol(data_to_analyze[,-1]) < 20)
+    {
+      print(colnames(data_to_analyze[,-1]))
+    } else {
+      print(paste(ncol(data_to_analyze[,-1]), "strategies (too many to print)"))
+    }
+    
     # Determine the optimal strategies for the current level of granularity
     results <- determine_optimal_strategy_simplified(data_to_analyze, time_horizon_years, 
                                                      minimum_allowable_percentage, granularity)
     
-    # Get the top X-percentile strategies
-    top_X_percentile <- quantile(results[[2]]$LowestCumulativeReturn, X_percentile)
+    # Get the top X-percentile strategies of remaining strategies (above threshold)
+    top_X_percentile <- quantile(results[[2]]$LowestCumulativeReturn, (1 - cutoff_percentile))
     
     # Get the strategies whose LowestCumulativeReturn > top_40
-    top_strategies <- results[[2]]$Strategy[results[[2]]$LowestCumulativeReturn > top_X_percentile]
+    top_strategies <- results[[2]]$Strategy[results[[2]]$LowestCumulativeReturn >= top_X_percentile]
     
     # Filter the strategies for the next level of granularity
     data_to_analyze <- data_to_analyze[ , c("Dates", top_strategies)]
-    print(paste("Current level of granularity:", granularity))
-    print("Top remaining strategies for further analysis:")
-    print(colnames(data_to_analyze[,-1]))
     
     # If less than 2 strategies remain, break the loop
     if (ncol(data_to_analyze) <= 2) {
@@ -1039,7 +1047,7 @@ determine_optimal_strategy_advanced_A <- function(df_return_series, time_horizon
   # Compute and print the total execution time of the function
   total_function_end <- Sys.time()
   total_function_time <- as.numeric(total_function_end - total_function_start, units = "secs")
-  print(paste("Execution time for TOTAL FUNCTION: ", round(total_function_time, 2), "seconds"))
+  print(paste("Execution time for FUNCTION determine_optimal_strategy_advanced_A and DATASET", deparse(substitute(df_return_series)), ":", round(total_function_time, 2), "seconds"))
   
   
   results[[4]] <- total_function_time
@@ -1062,7 +1070,7 @@ determine_optimal_strategy_advanced_A <- function(df_return_series, time_horizon
 #
 # @return A list containing the results of the analysis on the final level of granularity and the total execution time.
 determine_optimal_strategy_advanced_B <- function(df_return_series, time_horizon_years, 
-                                                minimum_allowable_percentage, X_percentile = 0.40) {
+                                                  minimum_allowable_percentage, cutoff_percentile = 0.50) {
   # Start timer for performance tracking
   total_function_start <- Sys.time()
   
@@ -1076,6 +1084,16 @@ determine_optimal_strategy_advanced_B <- function(df_return_series, time_horizon
   results_list <- list()
   
   for (granularity in granularities) {
+    # Display information about the current data to analyze
+    print(paste("Current level of granularity:", granularity))
+    print(paste("Top remaining strategies for analysis", granularity, ":"))
+    if(ncol(data_to_analyze[,-1]) < 20)
+    {
+      print(colnames(data_to_analyze[,-1]))
+    } else {
+      print(paste(ncol(data_to_analyze[,-1]), "strategies (too many to print)"))
+    }
+    
     # Determine the optimal strategies for the current level of granularity
     results <- determine_optimal_strategy_simplified(data_to_analyze, time_horizon_years, 
                                                      minimum_allowable_percentage, granularity)
@@ -1083,17 +1101,14 @@ determine_optimal_strategy_advanced_B <- function(df_return_series, time_horizon
     # Save the results for this granularity level
     results_list[[granularity]] <- results
     
-    # Get the top X-percentile strategies
-    top_X_percentile <- quantile(results[[2]]$LowestCumulativeReturn, X_percentile)
+    # Get the top X-percentile of remaining strategies (above threshold)
+    top_X_percentile <- quantile(results[[2]]$LowestCumulativeReturn, (1 - cutoff_percentile))
     
     # Get the strategies whose LowestCumulativeReturn > top_X_percentile
-    top_strategies <- results[[2]]$Strategy[results[[2]]$LowestCumulativeReturn > top_X_percentile]
+    top_strategies <- results[[2]]$Strategy[results[[2]]$LowestCumulativeReturn >= top_X_percentile]
     
     # Filter the strategies for the next level of granularity
     data_to_analyze <- data_to_analyze[ , c("Dates", top_strategies)]
-    print(paste("Current level of granularity:", granularity))
-    print("Top remaining strategies for further analysis:")
-    print(colnames(data_to_analyze[,-1]))
     
     # If no strategy remains, move back to the previous granularity level and get the "2nd_X_percentile" strategies
     if (ncol(data_to_analyze) <= 1) {
@@ -1122,7 +1137,7 @@ determine_optimal_strategy_advanced_B <- function(df_return_series, time_horizon
   # Compute and print the total execution time of the function
   total_function_end <- Sys.time()
   total_function_time <- as.numeric(total_function_end - total_function_start, units = "secs")
-  print(paste("Execution time for TOTAL FUNCTION: ", round(total_function_time, 2), "seconds"))
+  print(paste("Execution time for FUNCTION determine_optimal_strategy_advanced_B and DATASET", deparse(substitute(df_return_series)), ":", round(total_function_time, 2), "seconds"))
   
   results[[4]] <- total_function_time
   
