@@ -85,5 +85,8 @@ knitr::opts_chunk$set(echo = TRUE)
 
 <!-- Almost done! In this last section, suppose you have to re-run your data pipeline with substantially more data. Further suppose that you have access to cloud resources to scale up/scale out the different components of your pipeline. Briefly describe which cloud solutions you would use for which part of your analysis and explain why. Note: as in the explanations above, this part is also very project-specific. Some cloud solutions probably make sense for some projects but would be overkill in other projects, etc.  -->
 
+```{python}
+
+```
 
 
