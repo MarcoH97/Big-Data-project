@@ -23,12 +23,21 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## Summary of Methods and Results
 
+The aim of our project is to determine the optimal investment strategy on a set of generated portfolios based on
+the users input parameters. Our initial dataset included financial instruments that we found to be the most relevant
+for the goal of the project, with the focus being on equity indices, bonds and commodities. The initial values were transformed to daily returns in CHF, after which we generated a large number of portfolios using the combination of the initial 26 investment options. 
+Our research uses a collection of data from several sources, including Bloomberg Terminal, World Bank, and Swiss National Bank. The data includes price data of selected indices and currency pairs, Swiss inflation data, CHF money market rates, and spot interest rates on Swiss Confederation bond issues.
+
+
 
 
 # Data Collection and Data Storage (max. 500 words, not including code and code comments)
 
 
 <!-- Describe how you approach the data collection procedure. In your research setting, what were the challenges regarding collecting the raw data. How did you solve these challenges? How do you store the raw data and why?  -->
+
+We evaluated data from multiple sources, including Refinitiv Eikon, Bloomberg Terminal, Wharton Research Data Services, and Yahoo Finance, to find indexes with data that is consistent across securities and reaches as far back as possible. It is worth noting that determining which specific data from which data source we would utilize, let alone downloading the chosen data, was a time-consuming and significant task.
+To assure the quality of the input for our research, the technique includes extensive data cleansing, integration, transformation, and preparation (feature engineering).
 
 
 ```{r}
@@ -42,6 +51,9 @@ knitr::opts_chunk$set(echo = TRUE)
 # Data Cleaning and Preparation (max. 500 words, not including code and code comments)
 
 <!-- Describe the challenges related to cleaning/filtering your raw data in order to prepare an analytic data set. What were the bottle necks (which tasks and which hardware resources)? How did you speed up/improve the data cleaning procedure for large amounts of data? Which tools/techniques did you use and how do these tools/techniques work?   -->
+
+Our raw data included several different indices, bonds and commodities with different time-frames, therefore the first step we had to do was find a starting date that allows our time-series to be long enough to have meaningful analysis on and also does not remove too many columns. Once this was achieved we transformed the indice values into daily returns in CHF, for this we had to use difference data sources for currency exchange rates and central bank interest rates. We used this final version of our starting data to generate new portfolios using a combination of these 26 columns. If we take a combination of 'n' we generated every possible combination of 'n' columns with 1/n weights for each column. This includes every combination up to n. Considering how generating a combination of 5 different indices already results in 83681 different portfolios, with each portfolio consisting of 5052 rows, this resulted in a memory bottleneck. The highest amount of RAM we had access to on our computers was 16 GB, which meant that generating columns up to 6 combinations was not possible.
+While this data generation was a task we only needed to run once we still tried to optimise it and find more efficient ways to gain our final dataset. For this we used parallel processing, which was slower for combinations of up to 4 columns, but was significantly faster for combinations of 5 columns (1.2 minuites compared to 8.7 without parallel processing). This could be due to the overhead parallel processing creates when assigning the tasks for each core. We tried to generate a combination of 6 columns using this method, however the required memory for each core was too high for our systems and resulted in the crash of the R session.
 
 
 ```{r}
