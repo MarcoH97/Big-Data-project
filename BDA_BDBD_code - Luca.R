@@ -385,9 +385,6 @@ xts_strategies_max_3_comb_daily_rebal <- xts_generate_weighted_cols(xts_return_s
 
 # ------------------------------------------------------------------------------------------------ #
 
-#### (PRIORITY 2) TO RUN THE FOLLOWING LINES OF CODE: figure out (TO DO): ####
-# --> LUCA: a "generate_weighted_cols" function that is more computationally efficient
-# --> MARCO/ARIQ(2) big data methods (parallel processing / cloud services) for extra computational efficiency (storage + processing) 
 
 # strategies_max_5_comb_daily_rebal <- generate_weighted_cols_daily_rebal(index_daily_returns_CHF, 5)
 # strategies_max_6_comb_daily_rebal <- generate_weighted_cols_daily_rebal(index_daily_returns_CHF, 6)
