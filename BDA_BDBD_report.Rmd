@@ -106,6 +106,7 @@ This plot shows the lowest (out of each of the loops within the portfolio) cumul
 -Plot4: Worst-case, best.case and other historic return series for your optimal strategy: Switzerland IT treasuries(3-5Y, 5-7Y, 7-10Y)
 For this figure we picked the best (the one with the highest lowest end of period cumulative return) strategy from Plot3 and plotted each of the iterations of this portfolio. The threshold is once again the red line and the best and worst of the end period cumulative returns are highlighted with green and res respectively. For our research the worst case (red) is relevant.
 -Plot5: Cumulative returns for different starting dates (subset of actual analysis) for a given portfolio.
+This plot is similar to Plot4 but we investigated a portfolio that did drop below the threshold value.
 
 
 
@@ -129,8 +130,11 @@ To store a file of this size we could use cloud storage services such as Amazon 
 To generate and then run the optimization algorithm on a dataset this big we could utilize Apache Spark on cloud-based systems such as Amazon EMR, Azure HDInsight etc. 
 Since the way our algorithm works, looping through each portfolio is not dependent on each other, therefore utilizing the higher memory allocation and a greater number of well optimized CPU/GPU cores cloud platforms provide could substantially speed up our work and also allow us to generate the desired larger dataset. We believe that most of the calculations themselves are not necessarily heavy on the CPU, but rather require a large amount of multi-threading and lots of memory, which were our main bottlenecks with only 16 GB of RAM on our own computers.
 
+Most of the cloud solutions that run R code with increased memory and CPU performance are paid services, however we could run a python version of our code on Google colab and saw some improved performance on data generation and the optimization. The code for this can be found in the following files:
+
 
 ```{python}
+
 
 ```
 
