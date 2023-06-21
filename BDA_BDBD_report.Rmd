@@ -1,13 +1,13 @@
 ---
-title: "Research Report: PROJECT-TITLE"
-subtitle: "HSG Big Data Analytics Group Examination: GROUPNAME"
+title: "Research Report: Unique, optimal investment strategies for user-specified parameters"
+subtitle: "HSG Big Data Analytics Group Examination: Big Data Big Dreams"
 author:
-- Author1 (Student ID)
-- Author2 (Student ID)
-- Author3 (Student ID)
-- Author4 (Student ID)
+- Ariq Bintang (22-605-901)
+- Luca Gewehr (22-620-967)
+- Marco Hafid (22-620-546)
 
-date: "19/06/2023"
+
+date: "21/06/2023"
 output: html_document
 ---
 
@@ -45,14 +45,13 @@ The following raw data was loaded and saved into R data frames:
 -CHF_rf_rates: daily CHF money market rates and spot interest rates on Swiss confederation bond issues
 We evaluated data from multiple sources, including Refinitiv Eikon, Bloomberg Terminal, Wharton Research Data Services, and Yahoo Finance, to find indexes with data that is consistent across securities and reaches as far back as possible. It is worth noting that determining which specific data from which data source we would utilize, let alone downloading the chosen data, was a time-consuming and significant task.
 To assure the quality of the input for our research, the technique includes extensive data cleansing, integration, transformation, and preparation (feature engineering).
+The cleaned version of our data included 5051 observations for each portfolio and covered the returns between 2004-01-06 and 2023-05-16.
 The final dataset we worked on was 3.2 GB, so we could store it without issues on our own PC, however this could be scaled with an increased dataset and stored on Amazon S3 or Google Cloud Storage to reduce file size and achieve more efficient storage.
 
 
 ```{r}
-
-"code/BDA_BDBD_code.R" # lines: 1-45
+"code/BDA_BDBD_code.R" # lines: 1-100
 "code/BDA_BDBD_functions.R" # -
-
 ```
 
 
@@ -61,15 +60,13 @@ The final dataset we worked on was 3.2 GB, so we could store it without issues o
 
 <!-- Describe the challenges related to cleaning/filtering your raw data in order to prepare an analytic data set. What were the bottle necks (which tasks and which hardware resources)? How did you speed up/improve the data cleaning procedure for large amounts of data? Which tools/techniques did you use and how do these tools/techniques work?   -->
 
-Our raw data included several different indices, bonds and commodities with different time-frames, therefore the first step we had to do was find a starting date that allows our time-series to be long enough to have meaningful analysis on and also does not remove too many columns. Once this was achieved we transformed the indice values into daily returns in CHF, for this we had to use difference data sources for currency exchange rates and central bank interest rates. We used this final version of our starting data to generate new portfolios using a combination of these 26 columns. If we take a combination of 'n' we generated every possible combination of 'n' columns with 1/n weights for each column. This includes every combination up to n. Considering how generating a combination of 5 different indices already results in 83681 different portfolios, with each portfolio consisting of 5052 rows, this resulted in a memory bottleneck. The highest amount of RAM we had access to on our computers was 16 GB, which meant that generating columns up to 6 combinations was not possible.
+Our raw data included several different indices(equities,bonds and commodities) with different time-frames, therefore the first step we had to do was find a starting date that allows our time-series to be long enough to have meaningful analysis on and also does not remove too many columns. Once this was achieved we transformed the index values into daily returns in CHF, for this we had to use difference data sources for currency exchange rates and central bank interest rates. We used this final version of our starting data to generate new portfolios using a combination of these 26 columns. If we take a combination of 'n' we generated every possible combination of 'n' columns with 1/n weights for each column. This includes all possible combinations up to n. Given how generating a combination of up to 5 different indices results in 83681 different portfolios, with each portfolio consisting of 5052 rows, this resulted in a memory bottleneck. The highest amount of RAM we had access to on our computers was 16 GB, which meant that generating columns up to 6 combinations was not possible.
 While this data generation was a task we only needed to run once we still tried to optimize it and find more efficient ways to gain our final dataset. For this we used parallel processing, which was slower for combinations of up to 4 columns, but was significantly faster for combinations of 5 columns (1.2 minuites compared to 8.7 without parallel processing). This could be due to the overhead parallel processing creates when assigning the tasks for each core. We tried to generate a combination of 6 columns using this method, however the required memory for each core was too high for our systems and resulted in the crash of the R session.
 
 
 ```{r}
-
-"code/BDA_BDBD_code.R" # lines: 45-432
+"code/BDA_BDBD_code.R" # lines: 101-432
 "code/BDA_BDBD_functions.R" # lines: 1-213
-
 ```
 
 
@@ -78,17 +75,13 @@ While this data generation was a task we only needed to run once we still tried 
 
 <!-- Explain how you analyzed the data (which method(s) were used and why). Then explain what the challenges were in implementing these analyses, given the large amount of data. Finally, explain which tools/techniques you have used in order to tackle these challenges. Make sure to briefly point out why you have chosen these tools/techniques and how they helped.   -->
 
-On the final dataset we developed an optimization algorithm with the goal to find the best investment strategy based on the users input. The user can input the desired time frame and a threshold value. The program starts looping through each portfolio starting from the oldest date, throwing out any portfolio where the cumulative returns ever drop below the threshold value. (e.g: if the input time frame is 5 years, the first loop starts at 2000-01-01 and ends at 2005-01-01, if the threshold was not reached then it goes to the second loop: 2000-01-01 until 2005-01-02...until it reaches the end of the time-series). If the threshold was not breached then we are interested in the lowest value the portfolio had at the end of the period. Our goal is to find the investment strategy where the lowest value at the end of each period is the highest out of the remaining portfolios. This would mean it's an investment strategy that fits the individuals risk profile by never going below the given threshold, while also providing the best returns. 
+On the final dataset we developed an optimization algorithm with the purpose of determining the optimal investment strategy based on the input of the users. The user can specify a time frame and a threshold value. The software begins by looping through each portfolio, beginning with the oldest date and discarding any portfolio whose cumulative returns fall below the threshold value. (For example, if the input time frame is 5 years, the first loop begins at 2004-01-06 and ends at 2009-01-06; if the threshold is not met, it moves to the second loop, which begins at 2004-01-07 and ends at 2009-01-07...until it reaches the end of the time-series). If the threshold was not breached then we are interested in the lowest value the portfolio had at the end of the period. Our goal is to identify the investment strategy where the lowest value at the end of each period is the highest out of the remaining portfolios. This would mean it's an investment strategy that fits the individuals risk profile by never going below the given threshold, while also providing the best returns. 
 For data-visualization we looked at several different plots, this will be further discussed in the next section.
 
 
 ```{r}
-
-
 "code/BDA_BDBD_code.R" # lines: 432 - 626
 "code/BDA_BDBD_functions.R" # lines: 216-321
-
-
 ```
 
 
@@ -97,24 +90,26 @@ For data-visualization we looked at several different plots, this will be furthe
 
 <!-- First, briefly summarize your main findings. Then, show up to 5 exhibits (tables and figures). Right below each table/figure, add table/figure-notes that describe what the reader sees in the corresponding table/figure. (Hint: have a look at empirical papers in the top Econ outlets like AER, QJE, Econometrica, etc. to get a feeling for how Economists write such notes.) -->
 
--Plot1: Correlation matrix of the original 26 assets.
-This plot shows us the correlation matrix of our starting 26 assets. We can see that there is a strong positive correlation between the stocks of the different regions. The correlation is weaker between the treasury bonds and stocks, with the Swiss treasuries having negative correlation with most stock market indices. (Small caps, total caps for each region.)
--Plot2: Annualized mean and standard deviation for each candidate investment strategy:
-This plot shows us the annualized mean and standard deviation of all the generated portfolios, with the different number of combinations being colour coded. We also fitted an OLS regression for each of these groups, which shows us that including more combinations of assets does improve the risk-reward performance, so it's worth generating portfolios with a higher number of assets in them.
--Plot3: Lowest cumulative return series, for each candidate investment strategy:
-This plot shows the lowest (out of each of the loops within the portfolio) cumulative returns of each of the strategies plotted for the given time frame. The portfolios that never went below the threshold are highlighted with green, while the rest are grey. The threshold is the red line on the plot.
--Plot4: Worst-case, best.case and other historic return series for your optimal strategy: Switzerland IT treasuries(3-5Y, 5-7Y, 7-10Y)
-For this figure we picked the best (the one with the highest lowest end of period cumulative return) strategy from Plot3 and plotted each of the iterations of this portfolio. The threshold is once again the red line and the best and worst of the end period cumulative returns are highlighted with green and res respectively. For our research the worst case (red) is relevant.
--Plot5: Cumulative returns for different starting dates (subset of actual analysis) for a given portfolio.
-This plot is similar to Plot4 but we investigated a portfolio that did drop below the threshold value.
+-Plot 1: Correlation matrix of the original 26 assets.
+This plot displays the correlation matrix of our initial 26 assets. We observe a strong positive correlation among stocks from different regions. The correlation between treasury bonds and stocks is comparatively weaker, with Swiss treasuries exhibiting a negative correlation with most stock market indices (such as small caps and total caps for each region).
+
+-Plot 2: Annualized mean and standard deviation for each candidate investment strategy:
+This plot presents the annualized mean and standard deviation of all the generated portfolios, with different combinations color-coded. We also fit an OLS regression for each group, revealing that including more combinations of assets improves the risk-reward performance. Therefore, it is beneficial to generate portfolios with a higher number of assets.
+
+-Plot 3: Lowest cumulative return series, for each candidate investment strategy:
+This plot showcases the lowest cumulative returns (across different loops within each portfolio) for the given time frame. Portfolios that never fall below the threshold are highlighted in green, while others are displayed in gray. The threshold is represented by the red line on the plot.
+
+-Plot 4: Worst-case, best case and other historic return series for your optimal strategy: Switzerland IT treasuries(3-5Y, 5-7Y, 7-10Y)
+In this figure, we select the best strategy (with the highest lowest end-of-period cumulative return) from Plot 3 and plot each iteration of this portfolio. Once again, the threshold is indicated by the red line, and the best and worst end-of-period cumulative returns are highlighted in green and red, respectively. The worst case (red) is particularly relevant for our research.
+
+-Plot 5: Cumulative returns for different starting dates (subset of actual analysis) for a given portfolio.
+This plot is similar to Plot 4, but it examines a portfolio that did drop below the threshold value.
 
 
 
 ```{r}
-
 "code/BDA_BDBD_code.R" # lines: 627 - end  
 "code/BDA_BDBD_functions.R" # lines: 321- end
-
 ```
 
 
@@ -125,17 +120,17 @@ This plot is similar to Plot4 but we investigated a portfolio that did drop belo
 
 <!-- Almost done! In this last section, suppose you have to re-run your data pipeline with substantially more data. Further suppose that you have access to cloud resources to scale up/scale out the different components of your pipeline. Briefly describe which cloud solutions you would use for which part of your analysis and explain why. Note: as in the explanations above, this part is also very project-specific. Some cloud solutions probably make sense for some projects but would be overkill in other projects, etc.  -->
 
-First and foremost with the usage of cloud solutions we would generate a bigger dataset that includes portfolios with combination of assets of up to 7 or 8. Ideally we would go as high as possible, however each increase in combinations is an exponential increase in columns and file size. Portfolios with up to 8 combinations would result in about 2.3 million columns and a file size of 100 GB~. As we saw from our 2. plot however, including as many combinations provides us with greater value in our analysis.
+First and foremost by utilizing cloud solutions we would generate a bigger dataset that includes portfolios with combination of assets of up to 7 or 8. Ideally we would go as high as possible, however each increase in combinations is an exponential increase in columns and file size. Portfolios with up to 8 combinations would result in about 2.3 million columns and a file size of 100 GB~. As we saw from our 2. plot however, including as many combinations provides us with greater value in our analysis.
 To store a file of this size we could use cloud storage services such as Amazon S3 or Google Cloud Storage, which store the data more efficiently.
-To generate and then run the optimization algorithm on a dataset this big we could utilize Apache Spark on cloud-based systems such as Amazon EMR, Azure HDInsight etc. 
-Since the way our algorithm works, looping through each portfolio is not dependent on each other, therefore utilizing the higher memory allocation and a greater number of well optimized CPU/GPU cores cloud platforms provide could substantially speed up our work and also allow us to generate the desired larger dataset. We believe that most of the calculations themselves are not necessarily heavy on the CPU, but rather require a large amount of multi-threading and lots of memory, which were our main bottlenecks with only 16 GB of RAM on our own computers.
+To generate and then run the optimization algorithm on a dataset this big we could utilize Apache Spark on cloud-based systems such as Amazon EMR, Azure HDInsight etc. Utilising the cloud resources would also allow us to determine the optimal investment strategy for a wide variety of investors, using several different input parameters on a larger amount of portfolios.
 
-Most of the cloud solutions that run R code with increased memory and CPU performance are paid services, however we could run a python version of our code on Google colab and saw some improved performance on data generation and the optimization. The code for this can be found in the following files:
+Since the way our algorithm works, looping through each portfolio is not dependent on each other, therefore utilizing the higher memory allocation and a greater number of well optimized CPU/GPU cores cloud platforms provide could substantially speed up our work and also allow us to generate the desired larger dataset. We believe that most of the calculations themselves are not necessarily heavy on the CPU, but rather require a large amount of multi-threading and lots of memory, which were our main bottlenecks with only 16 GB of RAM on our own computers.
+Most of the cloud solutions that run R code with increased memory and CPU performance are paid services, however we could run a python version of our code on Google Code and saw some improved performance on data generation and the optimization. The code for this can be found in the following files:
 
 
 ```{python}
-
-
+"code/BigData_Cloud.py"
+"code/BigData_CloudFunctions.py"
 ```
 
 
